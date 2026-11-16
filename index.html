@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VSpotify — Custom Visualizer Player</title>
+  <link rel="stylesheet" href="styles.css" />
+  <script>window.onSpotifyWebPlaybackSDKReady = () => {};</script>
+  <script src="https://sdk.scdn.co/spotify-player.js" defer></script>
+</head>
+<body class="hud-cinema bg-album-blur">
+  <div id="bg-layer" class="bg-layer"></div>
+  <div class="bg-vignette"></div>
+
+  <canvas id="viz-canvas"></canvas>
+
+  <header id="top-bar" class="top-bar hud-auto-hide">
+    <div class="brand glass-pill">
+      <span class="brand-dot" id="device-dot"></span>
+      <span class="brand-name">VSpotify</span>
+      <span class="divider-dot"></span>
+      <span id="device-status" class="status-pill">Disconnected</span>
+    </div>
+
+    <div id="viz-quick-bar" class="viz-quick-bar glass-pill">
+      <button class="viz-chip active" data-viz="bars">Bars</button>
+      <button class="viz-chip" data-viz="radial">Radial</button>
+      <button class="viz-chip" data-viz="waveform">Wave</button>
+      <button class="viz-chip" data-viz="particles">Particles</button>
+      <button class="viz-chip" data-viz="horizon">Horizon</button>
+      <button class="viz-chip" data-viz="matrix">Matrix</button>
+      <button class="viz-chip" data-viz="milkdrop">Milkdrop</button>
+      <button class="viz-chip" data-viz="plasma">Plasma</button>
+      <button class="viz-chip" data-viz="lasers">Lasers</button>
+      <button class="viz-chip" data-viz="mirror">Concert</button>
+    </div>
+
+    <div class="top-actions">
+      <button id="btn-capture-audio" class="glass-pill action-pill" title="Capture Tab Audio for Real-Time Visuals">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <path d="M12 3v18M8 8v8M16 8v8M4 11v2M20 11v2"/>
+        </svg>
+        <span>Tab Audio</span>
+      </button>
+      <button id="btn-mic-audio" class="glass-pill action-pill" title="Listen to Speakers via Mac Mic">
+        <span>Room Mic</span>
+      </button>
+      <button id="btn-connect-spotify" class="glass-pill action-pill accent-pill">
+        <span>Connect</span>
+      </button>
+      <button id="btn-toggle-drawer" class="glass-pill icon-btn" title="Customize (C)">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+          <path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/>
+        </svg>
+      </button>
+      <button id="btn-fullscreen" class="glass-pill icon-btn" title="Fullscreen (F)">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <main id="hud-container" class="hud-container hud-auto-hide">
+    <div class="hud-card">
+      <div class="art-wrap">
+        <img id="track-art" class="track-art" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300' viewBox='0 0 300 300'%3E%3Crect width='300' height='300' fill='%23121216'/%3E%3Ccircle cx='150' cy='150' r='68' fill='none' stroke='%232e2e36' stroke-width='5'/%3E%3Ccircle cx='150' cy='150' r='14' fill='%232e2e36'/%3E%3C/svg%3E" alt="Album Art" crossorigin="anonymous" />
+      </div>
+
+      <div class="track-meta">
+        <div class="meta-text">
+          <div id="track-title" class="track-title">Ready to Play</div>
+          <div id="track-artist" class="track-artist">Connect Spotify or try Demo Audio in Customize</div>
+        </div>
+        <div class="progress-wrap">
+          <span id="time-current" class="time-label">0:00</span>
+          <input id="seek-bar" type="range" min="0" max="100" value="0" class="seek-bar" />
+          <span id="time-total" class="time-label">0:00</span>
+        </div>
+      </div>
+
+      <div class="transport-controls">
+        <button id="btn-prev" class="ctrl-btn" title="Previous">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+            <path d="M6 6h2v12H6zm3.5 6 8.5 6V6z"/>
+          </svg>
+        </button>
+        <button id="btn-play" class="ctrl-btn play-btn" title="Play / Pause (Space)" data-playing="false">
+          <svg class="icon-play" viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+            <path d="M8 5v14l11-7z"/>
+          </svg>
+          <svg class="icon-pause" viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+            <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
+          </svg>
+        </button>
+        <button id="btn-next" class="ctrl-btn" title="Next">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+            <path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </main>
+
+  <aside id="custom-drawer" class="custom-drawer hidden">
+    <div class="drawer-header">
+      <h2>Customize</h2>
+      <button id="btn-close-drawer" class="icon-btn subtle-close" title="Close">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <path d="M18 6 6 18M6 6l12 12"/>
+        </svg>
+      </button>
+    </div>
+
+    <div class="drawer-body">
+      <section class="control-group">
+        <h3>HUD Layout</h3>
+        <div class="segmented-row" id="hud-selector">
+          <button class="seg-btn active" data-hud="cinema">Cinema</button>
+          <button class="seg-btn" data-hud="minimal">Minimal</button>
+          <button class="seg-btn" data-hud="centered">Centered</button>
+          <button class="seg-btn" data-hud="hidden">Hidden</button>
+        </div>
+      </section>
+
+      <section class="control-group">
+        <h3>Theme &amp; Atmosphere</h3>
+        <label class="toggle-row">
+          <span>Auto-match Album Art</span>
+          <input type="checkbox" class="switch" id="opt-auto-color" checked />
+        </label>
+        <label class="slider-row">
+          <span>Accent Color</span>
+          <input type="color" id="opt-accent-color" value="#1db954" />
+        </label>
+        <label class="select-row">
+          <span>Background</span>
+          <select id="opt-bg-style">
+            <option value="album-blur">Album Art Blur</option>
+            <option value="pure-black">Pure OLED Black</option>
+            <option value="gradient">Subtle Radial Glow</option>
+          </select>
+        </label>
+        <label class="slider-row">
+          <span>Glow</span>
+          <input type="range" id="opt-glow" min="0" max="40" value="18" />
+        </label>
+        <label class="slider-row">
+          <span>HUD Opacity</span>
+          <input type="range" id="opt-hud-opacity" min="0.25" max="1" step="0.05" value="0.95" />
+        </label>
+        <label class="select-row">
+          <span>Auto-Hide HUD</span>
+          <select id="opt-autohide">
+            <option value="0">Never</option>
+            <option value="3000" selected>3 seconds</option>
+            <option value="5000">5 seconds</option>
+            <option value="10000">10 seconds</option>
+          </select>
+        </label>
+      </section>
+
+      <section class="control-group">
+        <h3>Visualizer Tuning</h3>
+        <label class="slider-row">
+          <span>Sensitivity</span>
+          <input type="range" id="opt-sensitivity" min="0.4" max="2.5" step="0.05" value="1.2" />
+        </label>
+        <label class="slider-row">
+          <span>Smoothing</span>
+          <input type="range" id="opt-smoothing" min="0.1" max="0.95" step="0.05" value="0.78" />
+        </label>
+        <label class="slider-row">
+          <span>Density</span>
+          <input type="range" id="opt-density" min="24" max="128" step="8" value="64" />
+        </label>
+      </section>
+
+      <section class="control-group">
+        <h3>Visual EQ Reactivity</h3>
+        <p class="hint-text">Shapes how frequency bands drive the visualizers.</p>
+        <label class="slider-row">
+          <span>Bass</span>
+          <input type="range" id="eq-bass" min="0" max="2.5" step="0.1" value="1.2" />
+        </label>
+        <label class="slider-row">
+          <span>Mids</span>
+          <input type="range" id="eq-mids" min="0" max="2.5" step="0.1" value="1.0" />
+        </label>
+        <label class="slider-row">
+          <span>Treble</span>
+          <input type="range" id="eq-treble" min="0" max="2.5" step="0.1" value="1.1" />
+        </label>
+      </section>
+
+      <section class="control-group">
+        <h3>Local &amp; Demo Audio</h3>
+        <div class="btn-row">
+          <button id="btn-demo-synth" class="glass-pill action-pill">Synth Beat</button>
+          <label class="glass-pill action-pill file-label">
+            Load Audio File
+            <input type="file" id="input-local-audio" accept="audio/*" hidden />
+          </label>
+        </div>
+      </section>
+    </div>
+  </aside>
+
+  <div id="setup-modal" class="modal hidden">
+    <div class="modal-card">
+      <h2>Connect Spotify</h2>
+      <p class="hint-text">
+        Uses OAuth 2.0 PKCE + Web Playback SDK (Spotify Premium required).
+        Add this Redirect URI in your Spotify Developer Dashboard:
+      </p>
+      <code id="redirect-uri-display" class="code-box">http://127.0.0.1:8888/</code>
+      <label class="input-group">
+        <span>Spotify Client ID</span>
+        <input type="text" id="input-client-id" placeholder="Paste your 32-char Client ID" />
+      </label>
+      <label class="input-group">
+        <span>Device Name</span>
+        <input type="text" id="input-device-name" value="VSpotify Mac" />
+      </label>
+      <div class="modal-actions">
+        <button id="btn-close-modal" class="glass-pill action-pill">Cancel</button>
+        <button id="btn-start-auth" class="glass-pill action-pill accent-pill">Authorize</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="src/app.js"></script>
+</body>
+</html>
