@@ -1,9 +1,11 @@
-// Unified Audio Engine: macOS System Audio Bridge (ws://127.0.0.1:8889), Local Files, Demo Synth, and Smooth Pulse
+// Unified Audio Engine: Tab Audio Capture (Zero-Delay FFT), Local Files, Demo Synth, and Playback Pulse
 
 export class AudioEngine {
   constructor() {
     this.ctx = null;
     this.analyser = null;
+    this.source = null;
+    this.captureStream = null;
     this.audioEl = new Audio();
     this.audioEl.crossOrigin = "anonymous";
     this.demoTimer = null;
@@ -11,49 +13,11 @@ export class AudioEngine {
     this.hasLiveAudio = false;
     this.isRemotePlaying = false;
 
-    // macOS ScreenCaptureKit WebSocket Bridge
-    this.ws = null;
-    this.wsConnected = false;
-    this.wsTargetFft = new Uint8Array(128);
-
     this.fftData = new Uint8Array(256);
-    this.smoothFft = new Float32Array(256);
     this.timeData = new Uint8Array(256);
     this.eqGains = { bass: 1.2, mids: 1.0, treble: 1.1 };
     this.smoothing = 0.78;
     this.sensitivity = 1.2;
-
-    this.connectBridge();
-  }
-
-  connectBridge() {
-    if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) {
-      return;
-    }
-    try {
-      const ws = new WebSocket("ws://127.0.0.1:8889");
-      ws.binaryType = "arraybuffer";
-      ws.onopen = () => {
-        this.wsConnected = true;
-      };
-      ws.onmessage = (evt) => {
-        const incoming = new Uint8Array(evt.data);
-        const len = Math.min(incoming.length, this.wsTargetFft.length);
-        for (let i = 0; i < len; i++) {
-          this.wsTargetFft[i] = incoming[i];
-        }
-      };
-      ws.onclose = () => {
-        this.wsConnected = false;
-        setTimeout(() => this.connectBridge(), 3000);
-      };
-      ws.onerror = () => {
-        this.wsConnected = false;
-      };
-      this.ws = ws;
-    } catch {
-      this.wsConnected = false;
-    }
   }
 
   ensureContext() {
@@ -87,6 +51,38 @@ export class AudioEngine {
 
   setEqGains(bass, mids, treble) {
     this.eqGains = { bass, mids, treble };
+  }
+
+  async startTabCapture() {
+    this.stopDemo();
+    this.ensureContext();
+
+    const stream = await navigator.mediaDevices.getDisplayMedia({
+      video: true,
+      audio: {
+        echoCancellation: false,
+        noiseSuppression: false,
+        autoGainControl: false
+      },
+      preferCurrentTab: true
+    });
+
+    stream.getVideoTracks().forEach((t) => t.stop());
+
+    if (stream.getAudioTracks().length === 0) {
+      throw new Error("No audio track was shared. Make sure 'Share tab audio' is checked.");
+    }
+
+    if (this.source) this.source.disconnect();
+    this.captureStream = stream;
+    this.source = this.ctx.createMediaStreamSource(stream);
+    this.source.connect(this.analyser);
+    this.hasLiveAudio = true;
+
+    stream.getAudioTracks()[0].addEventListener("ended", () => {
+      this.hasLiveAudio = false;
+    });
+    return true;
   }
 
   loadLocalFile(file, onMeta) {
@@ -238,27 +234,6 @@ export class AudioEngine {
   }
 
   sample() {
-    // Priority 1: Live macOS ScreenCaptureKit WebSocket Bridge (zero delay, zero tab sharing)
-    if (this.wsConnected) {
-      const alpha = 1 - Math.min(0.92, Math.max(0.15, this.smoothing * 0.85));
-      for (let i = 0; i < 128; i++) {
-        this.smoothFft[i] += (this.wsTargetFft[i] - this.smoothFft[i]) * alpha;
-        this.fftData[i] = Math.round(this.smoothFft[i]);
-      }
-      // Synthesize smooth waveform from live spectrum for wave/plasma modes
-      const t = performance.now() * 0.01;
-      for (let i = 0; i < this.timeData.length; i++) {
-        const amp = (this.fftData[i % 64] / 255) * 90;
-        this.timeData[i] = Math.max(0, Math.min(255, Math.floor(128 + Math.sin(t + i * 0.18) * amp)));
-      }
-      return {
-        fft: this.fftData,
-        time: this.timeData,
-        bands: this.computeBands(this.fftData)
-      };
-    }
-
-    // Priority 2: Local file / Demo Synth
     if (this.analyser && this.hasLiveAudio) {
       this.analyser.getByteFrequencyData(this.fftData);
       this.analyser.getByteTimeDomainData(this.timeData);
@@ -269,7 +244,6 @@ export class AudioEngine {
       };
     }
 
-    // Priority 3: Playback-Synced Pulse when remote Spotify is playing
     if (this.isRemotePlaying) {
       return this.sampleAmbientPulse();
     }

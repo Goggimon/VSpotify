@@ -293,9 +293,18 @@ document.getElementById("btn-fullscreen").onclick = () => {
   else document.exitFullscreen();
 };
 
-// Remove Tab Audio button per preference
+// Wire Tab Audio Capture cleanly (zero-delay FFT when Play Here is active)
 const captureBtn = document.getElementById("btn-capture-audio");
-if (captureBtn) captureBtn.remove();
+if (captureBtn) {
+  captureBtn.onclick = async () => {
+    try {
+      await audio.startTabCapture();
+      deviceStatus.textContent = "Tab Audio Live (60fps FFT)";
+    } catch (err) {
+      alert(err.message);
+    }
+  };
+}
 
 // Remove Lasers chip if present in HTML
 document.querySelector('[data-viz="lasers"]')?.remove();
