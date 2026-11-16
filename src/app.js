@@ -334,6 +334,7 @@ if (captureBtn) {
 }
 
 document.querySelector('[data-viz="lasers"]')?.remove();
+document.getElementById("btn-mic-audio")?.remove();
 
 // Add "Play Here" button when browser SDK registers
 const topActions = document.querySelector(".top-actions");
