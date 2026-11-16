@@ -2,33 +2,46 @@ import { AudioEngine } from "./audio.js";
 import { SpotifyBridge } from "./spotify.js";
 import { VisualizerRenderer } from "./visualizers.js";
 
-const APP_VERSION = "v1.0";
+const APP_VERSION = "v2.0.0";
 
 const audio = new AudioEngine();
 const canvas = document.getElementById("viz-canvas");
 const renderer = new VisualizerRenderer(canvas);
 
-// Version Counter in Brand Pill
+// Brand Pill v2.0.0 + Smoked Glass Prism Emblem & Favicon
+const prismSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="none"><path d="M12 2.5 20 7v10l-8 4.5L4 17V7l8-4.5Z" stroke="rgba(255,255,255,0.45)" stroke-width="1.4" fill="rgba(255,255,255,0.06)"/><path d="M4 7l8 4.5L20 7M12 11.5V21.5" stroke="rgba(255,255,255,0.25)" stroke-width="1.1"/><path d="M6.5 13h2l1.5-3.5 2 5.5 2-4.5 1.5 2.5h2" stroke="#1db954" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 const brandNameEl = document.querySelector(".brand-name");
 if (brandNameEl) {
-  brandNameEl.innerHTML = `VSpotify <span style="opacity:0.55;font-weight:500;font-size:0.74rem;margin-left:4px">${APP_VERSION}</span>`;
+  brandNameEl.innerHTML = `<span style="display:inline-flex;vertical-align:-3px;margin-right:6px">${prismSvg}</span>VSpotify <span style="opacity:0.55;font-weight:500;font-size:0.72rem;margin-left:4px">${APP_VERSION}</span>`;
 }
+let favicon = document.querySelector('link[rel="icon"]');
+if (!favicon) {
+  favicon = document.createElement("link");
+  favicon.rel = "icon";
+  document.head.appendChild(favicon);
+}
+favicon.href = `data:image/svg+xml,${encodeURIComponent(prismSvg)}`;
 
-// State & Saved Preferences
+// State & Saved Preferences (Default: Oud & Amber Luxury)
 const defaultPrefs = {
   viz: "bars",
   hud: "cinema",
   autoColor: true,
-  accent: "#1db954",
-  palette: ["#1db954"],
-  bgColor: "#050507",
+  smartIdleArt: true,
+  themeMode: "obsidian",
+  accent: "#e4e4e7",
+  palette: ["#e4e4e7", "#a1a1aa"],
+  bgColor: "#08080a",
   bgStyle: "album-blur",
   glow: 18,
-  hudOpacity: 0.9,
+  hudOpacity: 0.94,
   autohideMs: 3000,
   sensitivity: 1.2,
   smoothing: 0.78,
   density: 64,
+  thickness: 2.6,
+  speed: 1.0,
+  artScale: 1.0,
   eqBass: 1.2,
   eqMids: 1.0,
   eqTreble: 1.1
@@ -38,11 +51,11 @@ const prefs = { ...defaultPrefs, ...JSON.parse(localStorage.getItem("vspotify_pr
 if (prefs.viz === "lasers") prefs.viz = "bars";
 const savePrefs = () => localStorage.setItem("vspotify_prefs", JSON.stringify(prefs));
 
-// Built-in + User-Saved Presets
 const builtInPresets = {
-  Chill: { viz: "vinyl", hud: "minimal", bgStyle: "album-blur", glow: 14, sensitivity: 1.0, smoothing: 0.85, density: 48, eqBass: 1.1, eqMids: 1.0, eqTreble: 0.9 },
-  Concert: { viz: "mirror", hud: "cinema", bgStyle: "pure-black", glow: 28, sensitivity: 1.6, smoothing: 0.65, density: 80, eqBass: 1.5, eqMids: 1.2, eqTreble: 1.4 },
-  Retro: { viz: "synthwave", hud: "centered", bgStyle: "gradient", glow: 22, sensitivity: 1.3, smoothing: 0.75, density: 64, eqBass: 1.3, eqMids: 1.1, eqTreble: 1.2 }
+  "Late Night": { viz: "vinyl", hud: "minimal", bgStyle: "album-blur", glow: 16, sensitivity: 1.05, smoothing: 0.85, density: 48, thickness: 2.4, speed: 0.9 },
+  "Concert Hall": { viz: "mirror", hud: "cinema", bgStyle: "pure-black", glow: 28, sensitivity: 1.6, smoothing: 0.65, density: 80, thickness: 3.0, speed: 1.2 },
+  "Deep Space": { viz: "spiral", hud: "centered", bgStyle: "gradient", glow: 24, sensitivity: 1.3, smoothing: 0.78, density: 72, thickness: 2.6, speed: 1.05 },
+  "Retro Dusk": { viz: "synthwave", hud: "cinema", bgStyle: "gradient", glow: 22, sensitivity: 1.3, smoothing: 0.75, density: 64, thickness: 2.8, speed: 1.1 }
 };
 
 function getSavedPresets() {
@@ -83,23 +96,23 @@ function colorDist(c1, c2) {
 function ensureVisibleAgainstBg(col, bg) {
   let { r, g, b } = col;
   const lum = r * 0.299 + g * 0.587 + b * 0.114;
-  if (lum < 120) {
-    const boost = 155 / Math.max(25, lum);
+  if (lum < 125) {
+    const boost = 165 / Math.max(25, lum);
     r = Math.min(255, r * boost);
     g = Math.min(255, g * boost);
     b = Math.min(255, b * boost);
   }
   const adjusted = { r, g, b };
-  if (colorDist(adjusted, bg) < 110) {
+  if (colorDist(adjusted, bg) < 115) {
     const bgLum = bg.r * 0.299 + bg.g * 0.587 + bg.b * 0.114;
     if (bgLum < 128) {
-      r = Math.min(255, r + 95);
-      g = Math.min(255, g + 95);
-      b = Math.min(255, b + 95);
+      r = Math.min(255, r + 100);
+      g = Math.min(255, g + 100);
+      b = Math.min(255, b + 100);
     } else {
-      r = Math.max(0, r - 95);
-      g = Math.max(0, g - 95);
-      b = Math.max(0, b - 95);
+      r = Math.max(0, r - 100);
+      g = Math.max(0, g - 100);
+      b = Math.max(0, b - 100);
     }
   }
   return rgbToHex(r, g, b);
@@ -125,92 +138,128 @@ function setPalette(bgHex, vizColors) {
   renderer.setPalette(colors);
 }
 
-function extractPaletteFromArt(img) {
-  renderer.setArtImage(img);
-  if (!prefs.autoColor) return;
-  try {
-    const c = document.createElement("canvas");
-    c.width = 32;
-    c.height = 32;
-    const x = c.getContext("2d");
-    x.drawImage(img, 0, 0, 32, 32);
-    const data = x.getImageData(0, 0, 32, 32).data;
+// Reliable CORS-safe image loader for album art palette + canvas drawing
+function analyzeAlbumArtUrl(url) {
+  const probe = new Image();
+  probe.crossOrigin = "anonymous";
+  probe.onload = () => {
+    renderer.setArtImage(probe);
+    if (!prefs.autoColor) return;
+    try {
+      const c = document.createElement("canvas");
+      c.width = 40;
+      c.height = 40;
+      const x = c.getContext("2d");
+      x.drawImage(probe, 0, 0, 40, 40);
+      const data = x.getImageData(0, 0, 40, 40).data;
 
-    const buckets = new Map();
-    for (let i = 0; i < data.length; i += 4) {
-      const r = data[i];
-      const g = data[i + 1];
-      const b = data[i + 2];
-      const qr = Math.round(r / 24) * 24;
-      const qg = Math.round(g / 24) * 24;
-      const qb = Math.round(b / 24) * 24;
-      const key = `${qr},${qg},${qb}`;
-      const entry = buckets.get(key) || { r: 0, g: 0, b: 0, count: 0 };
-      entry.r += r;
-      entry.g += g;
-      entry.b += b;
-      entry.count++;
-      buckets.set(key, entry);
+      const buckets = new Map();
+      for (let i = 0; i < data.length; i += 4) {
+        const r = data[i];
+        const g = data[i + 1];
+        const b = data[i + 2];
+        const qr = Math.round(r / 24) * 24;
+        const qg = Math.round(g / 24) * 24;
+        const qb = Math.round(b / 24) * 24;
+        const key = `${qr},${qg},${qb}`;
+        const entry = buckets.get(key) || { r: 0, g: 0, b: 0, count: 0 };
+        entry.r += r;
+        entry.g += g;
+        entry.b += b;
+        entry.count++;
+        buckets.set(key, entry);
+      }
+
+      const totalPixels = 40 * 40;
+      const sorted = Array.from(buckets.values())
+        .map((e) => ({
+          r: e.r / e.count,
+          g: e.g / e.count,
+          b: e.b / e.count,
+          count: e.count
+        }))
+        .sort((a, b) => b.count - a.count);
+
+      if (sorted.length === 0) return;
+
+      // #1 most present color -> visible rich background hue (not crushed to black)
+      const primary = sorted[0];
+      const pLum = primary.r * 0.299 + primary.g * 0.587 + primary.b * 0.114;
+      const bgScale = pLum > 140 ? 0.48 : pLum < 35 ? 1.5 : 0.78;
+      const bgObj = {
+        r: Math.min(255, primary.r * bgScale),
+        g: Math.min(255, primary.g * bgScale),
+        b: Math.min(255, primary.b * bgScale)
+      };
+      const bgHex = rgbToHex(bgObj.r, bgObj.g, bgObj.b);
+
+      // #2 & #3 distinct colors -> alternating visualizer colors
+      const vizCandidates = [];
+      for (const col of sorted.slice(1)) {
+        if (col.count < totalPixels * 0.02) continue;
+        if (colorDist(col, primary) < 105 || colorDist(col, bgObj) < 110) continue;
+        if (vizCandidates.some((picked) => colorDist(col, picked) < 90)) continue;
+        vizCandidates.push(col);
+        if (vizCandidates.length === 3) break;
+      }
+
+      const vizHexList = vizCandidates.length > 0
+        ? vizCandidates.map((col) => ensureVisibleAgainstBg(col, bgObj))
+        : [ensureVisibleAgainstBg(sorted[1] || primary, bgObj)];
+
+      prefs.bgColor = bgHex;
+      prefs.accent = vizHexList[0];
+      prefs.palette = vizHexList;
+
+      const accentInput = document.getElementById("opt-accent-color");
+      if (accentInput) accentInput.value = vizHexList[0];
+
+      setPalette(bgHex, vizHexList);
+    } catch (err) {
+      console.warn("Album color extraction skipped:", err);
     }
+  };
+  probe.src = url;
+}
 
-    const totalPixels = 32 * 32;
-    const sorted = Array.from(buckets.values())
-      .map((e) => ({
-        r: e.r / e.count,
-        g: e.g / e.count,
-        b: e.b / e.count,
-        count: e.count
-      }))
-      .sort((a, b) => b.count - a.count);
+// Create floating corner mini-art badge for non-centered visualizers when HUD hides
+let cornerDock = document.getElementById("idle-corner-dock");
+if (!cornerDock) {
+  cornerDock = document.createElement("div");
+  cornerDock.id = "idle-corner-dock";
+  cornerDock.className = "idle-corner-dock";
+  cornerDock.innerHTML = `<img id="idle-art" alt="Art" /><div class="idle-meta"><div id="idle-title"></div><div id="idle-artist"></div></div>`;
+  document.body.appendChild(cornerDock);
+}
 
-    if (sorted.length === 0) return;
+function updateSmartArtPlacement() {
+  const isIdleOrFull =
+    document.body.classList.contains("hud-idle") || Boolean(document.fullscreenElement);
 
-    const primary = sorted[0];
-    const bgScale = (primary.r + primary.g + primary.b) > 380 ? 0.38 : 0.65;
-    const bgObj = {
-      r: primary.r * bgScale,
-      g: primary.g * bgScale,
-      b: primary.b * bgScale
-    };
-    const bgHex = rgbToHex(bgObj.r, bgObj.g, bgObj.b);
+  const centeredViz = renderer.isCenteredArtMode();
+  renderer.showCenterArt = Boolean(prefs.smartIdleArt && isIdleOrFull && centeredViz);
 
-    const vizCandidates = [];
-    for (const col of sorted.slice(1)) {
-      if (col.count < totalPixels * 0.025) continue;
-      if (colorDist(col, primary) < 110 || colorDist(col, bgObj) < 110) continue;
-      if (vizCandidates.some((picked) => colorDist(col, picked) < 95)) continue;
-      vizCandidates.push(col);
-      if (vizCandidates.length === 3) break;
-    }
-
-    const vizHexList = vizCandidates.length > 0
-      ? vizCandidates.map((col) => ensureVisibleAgainstBg(col, bgObj))
-      : [ensureVisibleAgainstBg(sorted[1] || primary, bgObj)];
-
-    prefs.bgColor = bgHex;
-    prefs.accent = vizHexList[0];
-    prefs.palette = vizHexList;
-
-    const accentInput = document.getElementById("opt-accent-color");
-    if (accentInput) accentInput.value = vizHexList[0];
-
-    setPalette(bgHex, vizHexList);
-  } catch {
-    // Ignore CORS taint if image blocks pixel read
-  }
+  // For non-centered visualizers (bars, wave, plasma, etc.), show sleek corner dock when HUD hides
+  const showCorner = Boolean(prefs.smartIdleArt && isIdleOrFull && !centeredViz && prefs.hud !== "hidden");
+  cornerDock.classList.toggle("visible", showCorner);
 }
 
 function syncControlsFromPrefs() {
   const map = {
     "opt-auto-color": ["autoColor", true],
+    "opt-smart-art": ["smartIdleArt", true],
     "opt-accent-color": ["accent", false],
     "opt-bg-style": ["bgStyle", false],
+    "opt-theme-mode": ["themeMode", false],
     "opt-glow": ["glow", false],
     "opt-hud-opacity": ["hudOpacity", false],
     "opt-autohide": ["autohideMs", false],
     "opt-sensitivity": ["sensitivity", false],
     "opt-smoothing": ["smoothing", false],
     "opt-density": ["density", false],
+    "opt-thickness": ["thickness", false],
+    "opt-speed": ["speed", false],
+    "opt-art-scale": ["artScale", false],
     "eq-bass": ["eqBass", false],
     "eq-mids": ["eqMids", false],
     "eq-treble": ["eqTreble", false]
@@ -226,6 +275,9 @@ function applyPrefs() {
   renderer.glow = Number(prefs.glow);
   renderer.density = Number(prefs.density);
   renderer.sensitivity = Number(prefs.sensitivity);
+  renderer.thickness = Number(prefs.thickness);
+  renderer.speed = Number(prefs.speed);
+  renderer.artScale = Number(prefs.artScale);
 
   audio.setSensitivity(Number(prefs.sensitivity));
   audio.setSmoothing(Number(prefs.smoothing));
@@ -234,9 +286,10 @@ function applyPrefs() {
   document.documentElement.style.setProperty("--glow", `${prefs.glow}px`);
   document.documentElement.style.setProperty("--hud-opacity", prefs.hudOpacity);
   const colors = prefs.autoColor && Array.isArray(prefs.palette) ? prefs.palette : [prefs.accent];
-  setPalette(prefs.bgColor || "#050507", colors);
+  setPalette(prefs.bgColor || "#140e0a", colors);
 
-  document.body.className = `hud-${prefs.hud} bg-${prefs.bgStyle}`;
+  const idleKeep = document.body.classList.contains("hud-idle") ? " hud-idle" : "";
+  document.body.className = `hud-${prefs.hud} bg-${prefs.bgStyle} theme-${prefs.themeMode}${idleKeep}`;
 
   document.querySelectorAll(".viz-chip").forEach((el) => {
     el.classList.toggle("active", el.dataset.viz === prefs.viz);
@@ -244,6 +297,8 @@ function applyPrefs() {
   document.querySelectorAll(".seg-btn").forEach((el) => {
     el.classList.toggle("active", el.dataset.hud === prefs.hud);
   });
+
+  updateSmartArtPlacement();
 }
 
 // Spotify Bridge
@@ -264,6 +319,9 @@ const spotify = new SpotifyBridge({
   onTrackUpdate: (track) => {
     trackTitle.textContent = track.name;
     trackArtist.textContent = track.artists;
+    document.getElementById("idle-title").textContent = track.name;
+    document.getElementById("idle-artist").textContent = track.artists;
+
     btnPlay.dataset.playing = track.paused ? "false" : "true";
     currentDurationMs = track.duration;
     timeTotal.textContent = formatTime(track.duration);
@@ -272,9 +330,10 @@ const spotify = new SpotifyBridge({
 
     if (track.artUrl && trackArt.src !== track.artUrl) {
       trackArt.src = track.artUrl;
+      document.getElementById("idle-art").src = track.artUrl;
       bgLayer.style.backgroundImage = `url("${track.artUrl}")`;
       bgLayer.classList.add("has-art");
-      trackArt.onload = () => extractPaletteFromArt(trackArt);
+      analyzeAlbumArtUrl(track.artUrl);
     }
   }
 });
@@ -282,16 +341,21 @@ const spotify = new SpotifyBridge({
 // Auto-hide HUD on idle
 function resetIdleTimer() {
   document.body.classList.remove("hud-idle");
+  updateSmartArtPlacement();
   clearTimeout(idleTimer);
   const ms = Number(prefs.autohideMs);
   if (ms > 0) {
-    idleTimer = setTimeout(() => document.body.classList.add("hud-idle"), ms);
+    idleTimer = setTimeout(() => {
+      document.body.classList.add("hud-idle");
+      updateSmartArtPlacement();
+    }, ms);
   }
 }
 
 ["mousemove", "mousedown", "keydown"].forEach((evt) => {
   window.addEventListener(evt, resetIdleTimer);
 });
+document.addEventListener("fullscreenchange", updateSmartArtPlacement);
 
 // UI Wiring
 window.addEventListener("resize", () => renderer.resize());
@@ -355,7 +419,7 @@ if (topActions && !document.getElementById("btn-play-here")) {
   topActions.prepend(playHereBtn);
 }
 
-// Inject Milkdrop, Plasma, Concert, Vinyl, Warp, Spiral, Synthwave into quick bar
+// Inject all 17 visualizers cleanly into quick bar
 const vizQuickBar = document.getElementById("viz-quick-bar");
 [
   ["milkdrop", "Milkdrop"],
@@ -364,7 +428,11 @@ const vizQuickBar = document.getElementById("viz-quick-bar");
   ["vinyl", "Vinyl"],
   ["warp", "Warp"],
   ["spiral", "Spiral"],
-  ["synthwave", "Synthwave"]
+  ["synthwave", "Synthwave"],
+  ["dna", "DNA"],
+  ["mandala", "Mandala"],
+  ["aurora", "Aurora"],
+  ["orbit", "Orbit"]
 ].forEach(([key, label]) => {
   if (!vizQuickBar.querySelector(`[data-viz="${key}"]`)) {
     const chip = document.createElement("button");
@@ -380,7 +448,7 @@ const vizQuickBar = document.getElementById("viz-quick-bar");
   }
 });
 
-// Inject Saveable Presets section into Customize drawer
+// Inject Presets & Extra Customization Controls into Drawer
 const drawerBody = document.querySelector(".drawer-body");
 if (drawerBody && !document.getElementById("preset-section")) {
   const sec = document.createElement("section");
@@ -408,7 +476,7 @@ if (drawerBody && !document.getElementById("preset-section")) {
   };
 
   document.getElementById("btn-save-preset").onclick = () => {
-    const name = prompt("Name this preset (e.g. Late Night):")?.trim();
+    const name = prompt("Name this preset (e.g. Late Night Oud):")?.trim();
     if (!name) return;
     const custom = JSON.parse(localStorage.getItem("vspotify_presets") || "{}");
     custom[name] = {
@@ -419,15 +487,45 @@ if (drawerBody && !document.getElementById("preset-section")) {
       sensitivity: prefs.sensitivity,
       smoothing: prefs.smoothing,
       density: prefs.density,
-      eqBass: prefs.eqBass,
-      eqMids: prefs.eqMids,
-      eqTreble: prefs.eqTreble
+      thickness: prefs.thickness,
+      speed: prefs.speed
     };
     localStorage.setItem("vspotify_presets", JSON.stringify(custom));
     renderPresets();
   };
 
   renderPresets();
+
+  // Add Extra Customization Controls dynamically
+  const extraGroup = document.createElement("section");
+  extraGroup.className = "control-group";
+  extraGroup.innerHTML = `
+    <h3>Fine Tuning &amp; Atmosphere</h3>
+    <label class="toggle-row">
+      <span>Smart Fullscreen Art Placement</span>
+      <input type="checkbox" class="switch" id="opt-smart-art" checked />
+    </label>
+    <label class="select-row">
+      <span>Luxury Surface</span>
+      <select id="opt-theme-mode">
+        <option value="obsidian">Obsidian Glass</option>
+        <option value="warm">Warm Espresso</option>
+      </select>
+    </label>
+    <label class="slider-row">
+      <span>Line / Bar Thickness</span>
+      <input type="range" id="opt-thickness" min="1" max="6" step="0.2" value="2.6" />
+    </label>
+    <label class="slider-row">
+      <span>Motion Speed</span>
+      <input type="range" id="opt-speed" min="0.4" max="2.2" step="0.1" value="1.0" />
+    </label>
+    <label class="slider-row">
+      <span>Center Art Size</span>
+      <input type="range" id="opt-art-scale" min="0.6" max="1.5" step="0.05" value="1.0" />
+    </label>
+  `;
+  drawerBody.insertBefore(extraGroup, drawerBody.children[3]);
 }
 
 // Setup Modal
@@ -471,9 +569,10 @@ document.getElementById("input-local-audio").onchange = (e) => {
   });
 };
 
-// Customization Inputs
+// Bind all inputs
 const bindInput = (id, key, isCheck = false) => {
   const el = document.getElementById(id);
+  if (!el) return;
   el[isCheck ? "checked" : "value"] = prefs[key];
   el.addEventListener("input", () => {
     prefs[key] = isCheck ? el.checked : el.value;
@@ -482,33 +581,33 @@ const bindInput = (id, key, isCheck = false) => {
   });
 };
 
-bindInput("opt-auto-color", "autoColor", true);
-bindInput("opt-accent-color", "accent");
-bindInput("opt-bg-style", "bgStyle");
-bindInput("opt-glow", "glow");
-bindInput("opt-hud-opacity", "hudOpacity");
-bindInput("opt-autohide", "autohideMs");
-bindInput("opt-sensitivity", "sensitivity");
-bindInput("opt-smoothing", "smoothing");
-bindInput("opt-density", "density");
-bindInput("eq-bass", "eqBass");
-bindInput("eq-mids", "eqMids");
-bindInput("eq-treble", "eqTreble");
+[
+  ["opt-auto-color", "autoColor", true],
+  ["opt-smart-art", "smartIdleArt", true],
+  ["opt-accent-color", "accent", false],
+  ["opt-bg-style", "bgStyle", false],
+  ["opt-theme-mode", "themeMode", false],
+  ["opt-glow", "glow", false],
+  ["opt-hud-opacity", "hudOpacity", false],
+  ["opt-autohide", "autohideMs", false],
+  ["opt-sensitivity", "sensitivity", false],
+  ["opt-smoothing", "smoothing", false],
+  ["opt-density", "density", false],
+  ["opt-thickness", "thickness", false],
+  ["opt-speed", "speed", false],
+  ["opt-art-scale", "artScale", false],
+  ["eq-bass", "eqBass", false],
+  ["eq-mids", "eqMids", false],
+  ["eq-treble", "eqTreble", false]
+].forEach(([id, key, isCheck]) => bindInput(id, key, isCheck));
 
 // Keyboard Shortcuts
 window.addEventListener("keydown", (e) => {
   if (e.target.tagName === "INPUT") return;
   const vizMap = {
-    "1": "bars",
-    "2": "radial",
-    "3": "waveform",
-    "4": "particles",
-    "5": "horizon",
-    "6": "matrix",
-    "7": "milkdrop",
-    "8": "plasma",
-    "9": "mirror",
-    "0": "vinyl"
+    "1": "bars", "2": "radial", "3": "waveform", "4": "particles",
+    "5": "horizon", "6": "matrix", "7": "milkdrop", "8": "plasma",
+    "9": "mirror", "0": "vinyl"
   };
   if (vizMap[e.key]) {
     prefs.viz = vizMap[e.key];

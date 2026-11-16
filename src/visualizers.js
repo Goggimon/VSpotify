@@ -1,15 +1,20 @@
-// Modular 60fps Canvas Visualizers (13 Modes with Alternating Album-Art Palette)
+// Modular 60fps Canvas Visualizers (17 Modes + Smart Center Album Art & Alternating Palette)
 
 export class VisualizerRenderer {
   constructor(canvas) {
     this.canvas = canvas;
     this.ctx = canvas.getContext("2d");
     this.mode = "bars";
-    this.accent = "#1db954";
-    this.palette = ["#1db954"];
+    this.accent = "#d4a359";
+    this.palette = ["#d4a359", "#f0d49a"];
     this.glow = 18;
     this.density = 64;
     this.sensitivity = 1.2;
+    this.thickness = 2.6;
+    this.speed = 1.0;
+    this.artScale = 1.0;
+    this.showCenterArt = false;
+
     this.phase = 0;
     this.vinylAngle = 0;
     this.artImage = null;
@@ -31,6 +36,11 @@ export class VisualizerRenderer {
 
   colorAt(index) {
     return this.palette[index % this.palette.length];
+  }
+
+  // Modes where album art sits naturally in the center when HUD hides / fullscreen
+  isCenteredArtMode() {
+    return ["radial", "spiral", "milkdrop", "mandala", "orbit"].includes(this.mode);
   }
 
   makeParticle() {
@@ -61,13 +71,40 @@ export class VisualizerRenderer {
     this.h = window.innerHeight;
   }
 
+  drawCenterAlbumArt(bands, baseRadius) {
+    if (!this.showCenterArt || !this.artImage || !this.artImage.complete || this.artImage.naturalWidth === 0) {
+      return;
+    }
+    const { ctx, w, h } = this;
+    const cx = w / 2;
+    const cy = h / 2;
+    const r = baseRadius * this.artScale + bands.bass * 8;
+
+    ctx.save();
+    ctx.shadowColor = this.colorAt(0);
+    ctx.shadowBlur = Math.max(18, this.glow * 1.4);
+
+    // Outer metallic ring
+    ctx.beginPath();
+    ctx.arc(cx, cy, r + 3, 0, Math.PI * 2);
+    ctx.strokeStyle = this.colorAt(0);
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.clip();
+    ctx.drawImage(this.artImage, cx - r, cy - r, r * 2, r * 2);
+    ctx.restore();
+  }
+
   render(sample) {
     const { ctx, w, h } = this;
-    this.phase += 0.018 + sample.bands.energy * 0.04;
-    this.vinylAngle += 0.008 + sample.bands.energy * 0.014;
+    this.phase += (0.016 + sample.bands.energy * 0.036) * this.speed;
+    this.vinylAngle += (0.007 + sample.bands.energy * 0.013) * this.speed;
 
     if (this.mode === "milkdrop" || this.mode === "warp") {
-      ctx.fillStyle = "rgba(5, 5, 8, 0.22)";
+      ctx.fillStyle = "rgba(9, 7, 5, 0.22)";
       ctx.fillRect(0, 0, w, h);
     } else {
       ctx.clearRect(0, 0, w, h);
@@ -78,45 +115,23 @@ export class VisualizerRenderer {
     ctx.shadowBlur = this.glow;
 
     switch (this.mode) {
-      case "bars":
-        this.drawBars(sample);
-        break;
-      case "radial":
-        this.drawRadial(sample);
-        break;
-      case "waveform":
-        this.drawWaveform(sample);
-        break;
-      case "particles":
-        this.drawParticles(sample);
-        break;
-      case "horizon":
-        this.drawHorizon(sample);
-        break;
-      case "matrix":
-        this.drawMatrix(sample);
-        break;
-      case "milkdrop":
-        this.drawMilkdrop(sample);
-        break;
-      case "plasma":
-        this.drawPlasma(sample);
-        break;
-      case "mirror":
-        this.drawMirror(sample);
-        break;
-      case "vinyl":
-        this.drawVinyl(sample);
-        break;
-      case "warp":
-        this.drawWarp(sample);
-        break;
-      case "spiral":
-        this.drawSpiral(sample);
-        break;
-      case "synthwave":
-        this.drawSynthwave(sample);
-        break;
+      case "bars": this.drawBars(sample); break;
+      case "radial": this.drawRadial(sample); break;
+      case "waveform": this.drawWaveform(sample); break;
+      case "particles": this.drawParticles(sample); break;
+      case "horizon": this.drawHorizon(sample); break;
+      case "matrix": this.drawMatrix(sample); break;
+      case "milkdrop": this.drawMilkdrop(sample); break;
+      case "plasma": this.drawPlasma(sample); break;
+      case "mirror": this.drawMirror(sample); break;
+      case "vinyl": this.drawVinyl(sample); break;
+      case "warp": this.drawWarp(sample); break;
+      case "spiral": this.drawSpiral(sample); break;
+      case "synthwave": this.drawSynthwave(sample); break;
+      case "dna": this.drawDNA(sample); break;
+      case "mandala": this.drawMandala(sample); break;
+      case "aurora": this.drawAurora(sample); break;
+      case "orbit": this.drawOrbit(sample); break;
     }
     ctx.restore();
   }
@@ -144,7 +159,7 @@ export class VisualizerRenderer {
       ctx.fill();
 
       ctx.globalAlpha = 1;
-      ctx.fillStyle = "#ffffff";
+      ctx.fillStyle = "#fff8eb";
       ctx.fillRect(x + 2, baseY - this.peaks[i] - 4, Math.max(2, barW - 4), 2.5);
     }
   }
@@ -153,10 +168,11 @@ export class VisualizerRenderer {
     const { ctx, w, h, density, sensitivity } = this;
     const cx = w / 2;
     const cy = h / 2;
-    const baseR = Math.min(w, h) * 0.18 + bands.bass * 26;
+    const centerR = this.showCenterArt ? Math.min(w, h) * 0.14 * this.artScale : Math.min(w, h) * 0.17;
+    const baseR = centerR + 14 + bands.bass * 20;
     const count = Math.min(density, fft.length);
 
-    ctx.lineWidth = 3;
+    ctx.lineWidth = this.thickness;
 
     for (let i = 0; i < count; i++) {
       const angle = (i / count) * Math.PI * 2 - Math.PI / 2;
@@ -164,18 +180,15 @@ export class VisualizerRenderer {
       const len = 10 + val * (Math.min(w, h) * 0.22);
       const col = this.colorAt(i);
 
-      const x1 = cx + Math.cos(angle) * baseR;
-      const y1 = cy + Math.sin(angle) * baseR;
-      const x2 = cx + Math.cos(angle) * (baseR + len);
-      const y2 = cy + Math.sin(angle) * (baseR + len);
-
       ctx.strokeStyle = col;
       ctx.shadowColor = col;
       ctx.beginPath();
-      ctx.moveTo(x1, y1);
-      ctx.lineTo(x2, y2);
+      ctx.moveTo(cx + Math.cos(angle) * baseR, cy + Math.sin(angle) * baseR);
+      ctx.lineTo(cx + Math.cos(angle) * (baseR + len), cy + Math.sin(angle) * (baseR + len));
       ctx.stroke();
     }
+
+    this.drawCenterAlbumArt(bands, Math.min(w, h) * 0.14);
   }
 
   drawWaveform({ time, bands }) {
@@ -188,7 +201,7 @@ export class VisualizerRenderer {
       ctx.strokeStyle = col;
       ctx.shadowColor = col;
       ctx.globalAlpha = l === 0 ? 0.95 : 0.45;
-      ctx.lineWidth = l === 0 ? 3 : 1.8;
+      ctx.lineWidth = l === 0 ? this.thickness : Math.max(1.2, this.thickness * 0.6);
 
       const amp = (h * 0.24) * sensitivity * (1 - l * 0.22);
       const slice = w / time.length;
@@ -206,7 +219,7 @@ export class VisualizerRenderer {
 
   drawParticles({ bands }) {
     const { ctx, w, h } = this;
-    const speedBoost = 1 + bands.energy * 6;
+    const speedBoost = (1 + bands.energy * 6) * this.speed;
 
     this.particles.forEach((p, idx) => {
       p.x += p.vx * speedBoost;
@@ -214,7 +227,7 @@ export class VisualizerRenderer {
       if (p.x < 0 || p.x > 1) p.vx *= -1;
       if (p.y < 0 || p.y > 1) p.vy *= -1;
 
-      const r = p.size * (1 + bands.bass * 2.2);
+      const r = p.size * (1 + bands.bass * 2.2) * (this.thickness / 2.6);
       const col = this.colorAt(idx);
       ctx.fillStyle = col;
       ctx.shadowColor = col;
@@ -235,7 +248,7 @@ export class VisualizerRenderer {
       ctx.strokeStyle = col;
       ctx.shadowColor = col;
       ctx.globalAlpha = 0.25 + (r / rows) * 0.72;
-      ctx.lineWidth = 2;
+      ctx.lineWidth = Math.max(1.5, this.thickness * 0.8);
 
       const baseY = h * 0.35 + r * (h * 0.06);
       const pts = 48;
@@ -265,7 +278,7 @@ export class VisualizerRenderer {
       const lit = Math.round(Math.min(1, (fft[idx] / 255) * sensitivity) * rows);
       const col = this.colorAt(c);
       for (let r = 0; r < rows; r++) {
-        ctx.fillStyle = r < lit ? col : "rgba(255,255,255,0.06)";
+        ctx.fillStyle = r < lit ? col : "rgba(255,245,230,0.06)";
         ctx.globalAlpha = r < lit ? 0.9 : 1;
         ctx.beginPath();
         ctx.roundRect(startX + c * cellW + 3, baseY - (r + 1) * cellH + 3, cellW - 6, cellH - 6, 4);
@@ -280,10 +293,11 @@ export class VisualizerRenderer {
     const cy = h / 2;
     const rings = 12;
     const sides = 6;
+    const minR = this.showCenterArt ? Math.min(w, h) * 0.12 * this.artScale : 0;
 
     for (let r = 0; r < rings; r++) {
       const progress = ((r / rings) + (this.phase * 0.15)) % 1;
-      const radius = progress * Math.max(w, h) * 0.58;
+      const radius = minR + progress * Math.max(w, h) * 0.55;
       const idx = Math.floor(progress * fft.length * 0.5);
       const warp = (fft[idx] / 255) * sensitivity * 32;
       const col = this.colorAt(r);
@@ -292,7 +306,7 @@ export class VisualizerRenderer {
       ctx.strokeStyle = col;
       ctx.shadowColor = col;
       ctx.globalAlpha = (1 - progress) * 0.88;
-      ctx.lineWidth = 1.6 + bands.bass * 2.2;
+      ctx.lineWidth = Math.max(1.4, this.thickness * 0.7 + bands.bass * 2);
 
       for (let s = 0; s <= sides * 4; s++) {
         const a = (s / (sides * 4)) * Math.PI * 2 + this.phase * (r % 2 === 0 ? 0.4 : -0.3);
@@ -304,6 +318,8 @@ export class VisualizerRenderer {
       }
       ctx.stroke();
     }
+
+    this.drawCenterAlbumArt(bands, Math.min(w, h) * 0.11);
   }
 
   drawPlasma({ time, bands }) {
@@ -316,7 +332,7 @@ export class VisualizerRenderer {
       ctx.strokeStyle = col;
       ctx.shadowColor = col;
       ctx.globalAlpha = 0.32 + (r / ribbons) * 0.62;
-      ctx.lineWidth = 2.5 + bands.mids * 2;
+      ctx.lineWidth = this.thickness + bands.mids * 1.8;
 
       for (let x = 0; x <= w; x += 12) {
         const nx = x / w;
@@ -360,14 +376,12 @@ export class VisualizerRenderer {
     }
   }
 
-  // 10. Spinning Vinyl Disc with Live Album Art + Beat Rings
   drawVinyl({ fft, bands }) {
     const { ctx, w, h, sensitivity } = this;
     const cx = w / 2;
     const cy = h / 2;
-    const discR = Math.min(w, h) * 0.25 + bands.bass * 10;
+    const discR = Math.min(w, h) * 0.25 * this.artScale + bands.bass * 10;
 
-    // Outer beat-reactive rings
     for (let r = 0; r < 4; r++) {
       const col = this.colorAt(r);
       const pulseR = discR + 18 + r * 22 + bands.energy * (18 + r * 8);
@@ -380,7 +394,6 @@ export class VisualizerRenderer {
       ctx.stroke();
     }
 
-    // Radial rim bars
     const rimBars = 48;
     for (let i = 0; i < rimBars; i++) {
       const a = (i / rimBars) * Math.PI * 2 + this.vinylAngle * 0.5;
@@ -389,26 +402,24 @@ export class VisualizerRenderer {
       ctx.strokeStyle = col;
       ctx.shadowColor = col;
       ctx.globalAlpha = 0.85;
-      ctx.lineWidth = 2.5;
+      ctx.lineWidth = this.thickness;
       ctx.beginPath();
       ctx.moveTo(cx + Math.cos(a) * (discR + 4), cy + Math.sin(a) * (discR + 4));
       ctx.lineTo(cx + Math.cos(a) * (discR + 4 + len), cy + Math.sin(a) * (discR + 4 + len));
       ctx.stroke();
     }
 
-    // Vinyl record body
     ctx.save();
     ctx.translate(cx, cy);
     ctx.rotate(this.vinylAngle);
 
-    ctx.globalAlpha = 0.95;
-    ctx.fillStyle = "#0b0b0e";
+    ctx.globalAlpha = 0.96;
+    ctx.fillStyle = "#0b0908";
     ctx.beginPath();
     ctx.arc(0, 0, discR, 0, Math.PI * 2);
     ctx.fill();
 
-    // Subtle vinyl grooves
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.07)";
+    ctx.strokeStyle = "rgba(255, 235, 200, 0.08)";
     ctx.lineWidth = 1;
     for (let g = discR * 0.48; g < discR * 0.94; g += 7) {
       ctx.beginPath();
@@ -416,8 +427,7 @@ export class VisualizerRenderer {
       ctx.stroke();
     }
 
-    // Center album art label
-    const labelR = discR * 0.42;
+    const labelR = discR * 0.44;
     ctx.beginPath();
     ctx.arc(0, 0, labelR, 0, Math.PI * 2);
     ctx.clip();
@@ -429,19 +439,17 @@ export class VisualizerRenderer {
     }
     ctx.restore();
 
-    // Center spindle hole
-    ctx.fillStyle = "#050507";
+    ctx.fillStyle = "#090705";
     ctx.beginPath();
     ctx.arc(cx, cy, 6, 0, Math.PI * 2);
     ctx.fill();
   }
 
-  // 11. 3D Warp Starfield Tunnel
   drawWarp({ bands }) {
     const { ctx, w, h, sensitivity } = this;
     const cx = w / 2;
     const cy = h / 2;
-    const speed = (0.008 + bands.energy * 0.032) * sensitivity;
+    const speed = (0.008 + bands.energy * 0.032) * sensitivity * this.speed;
 
     this.stars.forEach((s, idx) => {
       s.pz = s.z;
@@ -462,7 +470,7 @@ export class VisualizerRenderer {
       ctx.strokeStyle = col;
       ctx.shadowColor = col;
       ctx.globalAlpha = Math.min(1, (1 - s.z) * 1.2);
-      ctx.lineWidth = 1 + (1 - s.z) * (2.5 + bands.bass * 2);
+      ctx.lineWidth = 1 + (1 - s.z) * (this.thickness + bands.bass * 2);
       ctx.beginPath();
       ctx.moveTo(px, py);
       ctx.lineTo(sx, sy);
@@ -470,27 +478,27 @@ export class VisualizerRenderer {
     });
   }
 
-  // 12. Audio Galaxy / Frequency Spiral
   drawSpiral({ fft, bands }) {
     const { ctx, w, h, density, sensitivity } = this;
     const cx = w / 2;
     const cy = h / 2;
     const arms = 3;
     const points = Math.min(density, 96);
+    const startR = this.showCenterArt ? Math.min(w, h) * 0.13 * this.artScale : 0;
 
     for (let a = 0; a < arms; a++) {
       const col = this.colorAt(a);
       ctx.beginPath();
       ctx.strokeStyle = col;
       ctx.shadowColor = col;
-      ctx.globalAlpha = 0.85;
-      ctx.lineWidth = 2 + bands.mids * 1.5;
+      ctx.globalAlpha = 0.88;
+      ctx.lineWidth = this.thickness + bands.mids * 1.5;
 
       for (let i = 0; i < points; i++) {
         const t = i / points;
         const angle = t * Math.PI * 5 + this.phase * 0.9 + (a * Math.PI * 2) / arms;
         const val = (fft[i % fft.length] / 255) * sensitivity;
-        const rad = t * Math.min(w, h) * 0.38 + val * 28;
+        const rad = startR + t * (Math.min(w, h) * 0.36) + val * 28;
         const x = cx + Math.cos(angle) * rad;
         const y = cy + Math.sin(angle) * rad;
         if (i === 0) ctx.moveTo(x, y);
@@ -498,9 +506,10 @@ export class VisualizerRenderer {
       }
       ctx.stroke();
     }
+
+    this.drawCenterAlbumArt(bands, Math.min(w, h) * 0.125);
   }
 
-  // 13. Synthwave Retro Sun & Perspective Grid
   drawSynthwave({ fft, bands }) {
     const { ctx, w, h, sensitivity } = this;
     const horizonY = h * 0.56;
@@ -508,7 +517,6 @@ export class VisualizerRenderer {
     const sunX = w / 2;
     const sunY = horizonY - sunR * 0.55;
 
-    // Segmented retro sun
     ctx.save();
     ctx.beginPath();
     ctx.arc(sunX, sunY, sunR, 0, Math.PI * 2);
@@ -521,7 +529,6 @@ export class VisualizerRenderer {
     ctx.globalAlpha = 0.85;
     ctx.fillRect(sunX - sunR, sunY - sunR, sunR * 2, sunR * 2);
 
-    // Horizontal sun scan cutouts
     ctx.globalCompositeOperation = "destination-out";
     for (let y = sunY + 4; y < sunY + sunR; y += 14) {
       const thickness = 2 + ((y - sunY) / sunR) * 5;
@@ -529,11 +536,10 @@ export class VisualizerRenderer {
     }
     ctx.restore();
 
-    // Horizon spectrum silhouette
     ctx.beginPath();
     ctx.strokeStyle = this.colorAt(1);
     ctx.shadowColor = this.colorAt(1);
-    ctx.lineWidth = 2.5;
+    ctx.lineWidth = this.thickness;
     ctx.globalAlpha = 0.9;
     const pts = 48;
     for (let i = 0; i <= pts; i++) {
@@ -546,7 +552,6 @@ export class VisualizerRenderer {
     }
     ctx.stroke();
 
-    // Perspective floor grid
     const gridCol = this.colorAt(0);
     ctx.strokeStyle = gridCol;
     ctx.shadowColor = gridCol;
@@ -571,5 +576,145 @@ export class VisualizerRenderer {
       ctx.lineTo(w, y);
       ctx.stroke();
     }
+  }
+
+  // 14. Double Helix DNA
+  drawDNA({ fft, bands }) {
+    const { ctx, w, h, sensitivity } = this;
+    const pts = 48;
+    const amp = h * 0.18 + bands.bass * 35;
+
+    for (let s = 0; s < 2; s++) {
+      const col = this.colorAt(s);
+      ctx.beginPath();
+      ctx.strokeStyle = col;
+      ctx.shadowColor = col;
+      ctx.lineWidth = this.thickness;
+      ctx.globalAlpha = 0.9;
+
+      for (let i = 0; i <= pts; i++) {
+        const t = i / pts;
+        const x = w * 0.08 + t * (w * 0.84);
+        const mod = (fft[i % fft.length] / 255) * sensitivity * 45;
+        const y = h / 2 + Math.sin(t * Math.PI * 4 + this.phase * 1.4 + s * Math.PI) * (amp + mod * 0.4);
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    }
+
+    // Connecting rungs
+    ctx.lineWidth = 1.5;
+    for (let i = 0; i <= pts; i += 2) {
+      const t = i / pts;
+      const x = w * 0.08 + t * (w * 0.84);
+      const y1 = h / 2 + Math.sin(t * Math.PI * 4 + this.phase * 1.4) * amp;
+      const y2 = h / 2 + Math.sin(t * Math.PI * 4 + this.phase * 1.4 + Math.PI) * amp;
+      ctx.strokeStyle = this.colorAt(i);
+      ctx.globalAlpha = 0.4;
+      ctx.beginPath();
+      ctx.moveTo(x, y1);
+      ctx.lineTo(x, y2);
+      ctx.stroke();
+    }
+  }
+
+  // 15. Sacred Geometry Mandala
+  drawMandala({ fft, bands }) {
+    const { ctx, w, h, sensitivity } = this;
+    const cx = w / 2;
+    const cy = h / 2;
+    const folds = 12;
+    const startR = this.showCenterArt ? Math.min(w, h) * 0.13 * this.artScale : 24;
+
+    for (let f = 0; f < folds; f++) {
+      const baseAngle = (f / folds) * Math.PI * 2 + this.phase * 0.35;
+      const col = this.colorAt(f);
+      ctx.beginPath();
+      ctx.strokeStyle = col;
+      ctx.shadowColor = col;
+      ctx.lineWidth = Math.max(1.5, this.thickness * 0.8);
+      ctx.globalAlpha = 0.8;
+
+      for (let i = 0; i < 24; i++) {
+        const t = i / 23;
+        const val = (fft[i * 2] / 255) * sensitivity;
+        const r = startR + t * Math.min(w, h) * 0.28 + val * 30;
+        const sway = Math.sin(t * Math.PI * 2 + this.phase) * 0.18;
+        const x = cx + Math.cos(baseAngle + sway) * r;
+        const y = cy + Math.sin(baseAngle + sway) * r;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    }
+
+    this.drawCenterAlbumArt(bands, Math.min(w, h) * 0.125);
+  }
+
+  // 16. Northern Lights Aurora Curtains
+  drawAurora({ fft, bands }) {
+    const { ctx, w, h, density, sensitivity } = this;
+    const cols = Math.min(density, 72);
+    const colW = w / cols;
+
+    for (let i = 0; i < cols; i++) {
+      const val = Math.min(1, (fft[i] / 255) * sensitivity);
+      const col = this.colorAt(i);
+      const curtainH = h * (0.28 + val * 0.55);
+      const yTop = h * 0.15 + Math.sin(this.phase + i * 0.2) * 35;
+
+      const grad = ctx.createLinearGradient(0, yTop, 0, yTop + curtainH);
+      grad.addColorStop(0, "transparent");
+      grad.addColorStop(0.4, col);
+      grad.addColorStop(1, "transparent");
+
+      ctx.fillStyle = grad;
+      ctx.globalAlpha = 0.22 + val * 0.5 + bands.mids * 0.1;
+      ctx.fillRect(i * colW, yTop, colW + 2, curtainH);
+    }
+  }
+
+  // 17. Planetary Orbitals
+  drawOrbit({ fft, bands }) {
+    const { ctx, w, h, sensitivity } = this;
+    const cx = w / 2;
+    const cy = h / 2;
+    const orbits = 5;
+    const baseR = this.showCenterArt ? Math.min(w, h) * 0.16 * this.artScale : Math.min(w, h) * 0.12;
+
+    for (let o = 0; o < orbits; o++) {
+      const rx = baseR + o * (Math.min(w, h) * 0.055) + bands.bass * 12;
+      const ry = rx * 0.48;
+      const tilt = o * 0.45 + this.phase * 0.15;
+      const col = this.colorAt(o);
+
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(tilt);
+
+      ctx.beginPath();
+      ctx.strokeStyle = col;
+      ctx.shadowColor = col;
+      ctx.globalAlpha = 0.45;
+      ctx.lineWidth = Math.max(1.2, this.thickness * 0.65);
+      ctx.ellipse(0, 0, rx, ry, 0, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Orbiting audio-reactive node
+      const a = this.phase * (1.2 + o * 0.35);
+      const nx = Math.cos(a) * rx;
+      const ny = Math.sin(a) * ry;
+      const nodeR = 4 + (fft[o * 6] / 255) * sensitivity * 9;
+
+      ctx.fillStyle = col;
+      ctx.globalAlpha = 0.95;
+      ctx.beginPath();
+      ctx.arc(nx, ny, nodeR, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    this.drawCenterAlbumArt(bands, Math.min(w, h) * 0.125);
   }
 }
