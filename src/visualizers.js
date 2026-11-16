@@ -1,4 +1,4 @@
-// Modular 60fps Canvas Visualizers (9 Modes with Alternating Album-Art Palette)
+// Modular 60fps Canvas Visualizers (13 Modes with Alternating Album-Art Palette)
 
 export class VisualizerRenderer {
   constructor(canvas) {
@@ -11,10 +11,17 @@ export class VisualizerRenderer {
     this.density = 64;
     this.sensitivity = 1.2;
     this.phase = 0;
+    this.vinylAngle = 0;
+    this.artImage = null;
 
     this.peaks = new Float32Array(128);
     this.particles = Array.from({ length: 110 }, () => this.makeParticle());
+    this.stars = Array.from({ length: 160 }, () => this.makeStar());
     this.resize();
+  }
+
+  setArtImage(img) {
+    this.artImage = img;
   }
 
   setPalette(colors) {
@@ -36,6 +43,15 @@ export class VisualizerRenderer {
     };
   }
 
+  makeStar() {
+    return {
+      x: (Math.random() - 0.5) * 2,
+      y: (Math.random() - 0.5) * 2,
+      z: Math.random(),
+      pz: 1
+    };
+  }
+
   resize() {
     const dpr = window.devicePixelRatio || 1;
     this.canvas.width = window.innerWidth * dpr;
@@ -48,9 +64,10 @@ export class VisualizerRenderer {
   render(sample) {
     const { ctx, w, h } = this;
     this.phase += 0.018 + sample.bands.energy * 0.04;
+    this.vinylAngle += 0.008 + sample.bands.energy * 0.014;
 
-    if (this.mode === "milkdrop") {
-      ctx.fillStyle = "rgba(5, 5, 8, 0.18)";
+    if (this.mode === "milkdrop" || this.mode === "warp") {
+      ctx.fillStyle = "rgba(5, 5, 8, 0.22)";
       ctx.fillRect(0, 0, w, h);
     } else {
       ctx.clearRect(0, 0, w, h);
@@ -87,6 +104,18 @@ export class VisualizerRenderer {
         break;
       case "mirror":
         this.drawMirror(sample);
+        break;
+      case "vinyl":
+        this.drawVinyl(sample);
+        break;
+      case "warp":
+        this.drawWarp(sample);
+        break;
+      case "spiral":
+        this.drawSpiral(sample);
+        break;
+      case "synthwave":
+        this.drawSynthwave(sample);
         break;
     }
     ctx.restore();
@@ -328,6 +357,219 @@ export class VisualizerRenderer {
       ctx.roundRect(xRight + 1, cy - barH, Math.max(2, barW - 2), barH * 2, 3);
       ctx.roundRect(xLeft + 1, cy - barH, Math.max(2, barW - 2), barH * 2, 3);
       ctx.fill();
+    }
+  }
+
+  // 10. Spinning Vinyl Disc with Live Album Art + Beat Rings
+  drawVinyl({ fft, bands }) {
+    const { ctx, w, h, sensitivity } = this;
+    const cx = w / 2;
+    const cy = h / 2;
+    const discR = Math.min(w, h) * 0.25 + bands.bass * 10;
+
+    // Outer beat-reactive rings
+    for (let r = 0; r < 4; r++) {
+      const col = this.colorAt(r);
+      const pulseR = discR + 18 + r * 22 + bands.energy * (18 + r * 8);
+      ctx.beginPath();
+      ctx.strokeStyle = col;
+      ctx.shadowColor = col;
+      ctx.globalAlpha = 0.45 - r * 0.08;
+      ctx.lineWidth = 2;
+      ctx.arc(cx, cy, pulseR, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    // Radial rim bars
+    const rimBars = 48;
+    for (let i = 0; i < rimBars; i++) {
+      const a = (i / rimBars) * Math.PI * 2 + this.vinylAngle * 0.5;
+      const len = 6 + Math.min(1, (fft[i] / 255) * sensitivity) * 44;
+      const col = this.colorAt(i);
+      ctx.strokeStyle = col;
+      ctx.shadowColor = col;
+      ctx.globalAlpha = 0.85;
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.moveTo(cx + Math.cos(a) * (discR + 4), cy + Math.sin(a) * (discR + 4));
+      ctx.lineTo(cx + Math.cos(a) * (discR + 4 + len), cy + Math.sin(a) * (discR + 4 + len));
+      ctx.stroke();
+    }
+
+    // Vinyl record body
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(this.vinylAngle);
+
+    ctx.globalAlpha = 0.95;
+    ctx.fillStyle = "#0b0b0e";
+    ctx.beginPath();
+    ctx.arc(0, 0, discR, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Subtle vinyl grooves
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.07)";
+    ctx.lineWidth = 1;
+    for (let g = discR * 0.48; g < discR * 0.94; g += 7) {
+      ctx.beginPath();
+      ctx.arc(0, 0, g, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    // Center album art label
+    const labelR = discR * 0.42;
+    ctx.beginPath();
+    ctx.arc(0, 0, labelR, 0, Math.PI * 2);
+    ctx.clip();
+    if (this.artImage && this.artImage.complete && this.artImage.naturalWidth > 0) {
+      ctx.drawImage(this.artImage, -labelR, -labelR, labelR * 2, labelR * 2);
+    } else {
+      ctx.fillStyle = this.accent;
+      ctx.fill();
+    }
+    ctx.restore();
+
+    // Center spindle hole
+    ctx.fillStyle = "#050507";
+    ctx.beginPath();
+    ctx.arc(cx, cy, 6, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // 11. 3D Warp Starfield Tunnel
+  drawWarp({ bands }) {
+    const { ctx, w, h, sensitivity } = this;
+    const cx = w / 2;
+    const cy = h / 2;
+    const speed = (0.008 + bands.energy * 0.032) * sensitivity;
+
+    this.stars.forEach((s, idx) => {
+      s.pz = s.z;
+      s.z -= speed;
+      if (s.z <= 0.02) {
+        s.x = (Math.random() - 0.5) * 2;
+        s.y = (Math.random() - 0.5) * 2;
+        s.z = 1;
+        s.pz = 1;
+      }
+
+      const sx = cx + (s.x / s.z) * (w * 0.45);
+      const sy = cy + (s.y / s.z) * (h * 0.45);
+      const px = cx + (s.x / s.pz) * (w * 0.45);
+      const py = cy + (s.y / s.pz) * (h * 0.45);
+
+      const col = this.colorAt(idx);
+      ctx.strokeStyle = col;
+      ctx.shadowColor = col;
+      ctx.globalAlpha = Math.min(1, (1 - s.z) * 1.2);
+      ctx.lineWidth = 1 + (1 - s.z) * (2.5 + bands.bass * 2);
+      ctx.beginPath();
+      ctx.moveTo(px, py);
+      ctx.lineTo(sx, sy);
+      ctx.stroke();
+    });
+  }
+
+  // 12. Audio Galaxy / Frequency Spiral
+  drawSpiral({ fft, bands }) {
+    const { ctx, w, h, density, sensitivity } = this;
+    const cx = w / 2;
+    const cy = h / 2;
+    const arms = 3;
+    const points = Math.min(density, 96);
+
+    for (let a = 0; a < arms; a++) {
+      const col = this.colorAt(a);
+      ctx.beginPath();
+      ctx.strokeStyle = col;
+      ctx.shadowColor = col;
+      ctx.globalAlpha = 0.85;
+      ctx.lineWidth = 2 + bands.mids * 1.5;
+
+      for (let i = 0; i < points; i++) {
+        const t = i / points;
+        const angle = t * Math.PI * 5 + this.phase * 0.9 + (a * Math.PI * 2) / arms;
+        const val = (fft[i % fft.length] / 255) * sensitivity;
+        const rad = t * Math.min(w, h) * 0.38 + val * 28;
+        const x = cx + Math.cos(angle) * rad;
+        const y = cy + Math.sin(angle) * rad;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    }
+  }
+
+  // 13. Synthwave Retro Sun & Perspective Grid
+  drawSynthwave({ fft, bands }) {
+    const { ctx, w, h, sensitivity } = this;
+    const horizonY = h * 0.56;
+    const sunR = Math.min(w, h) * 0.16 + bands.bass * 12;
+    const sunX = w / 2;
+    const sunY = horizonY - sunR * 0.55;
+
+    // Segmented retro sun
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(sunX, sunY, sunR, 0, Math.PI * 2);
+    ctx.clip();
+
+    const sunGrad = ctx.createLinearGradient(0, sunY - sunR, 0, sunY + sunR);
+    sunGrad.addColorStop(0, this.colorAt(0));
+    sunGrad.addColorStop(1, this.colorAt(1));
+    ctx.fillStyle = sunGrad;
+    ctx.globalAlpha = 0.85;
+    ctx.fillRect(sunX - sunR, sunY - sunR, sunR * 2, sunR * 2);
+
+    // Horizontal sun scan cutouts
+    ctx.globalCompositeOperation = "destination-out";
+    for (let y = sunY + 4; y < sunY + sunR; y += 14) {
+      const thickness = 2 + ((y - sunY) / sunR) * 5;
+      ctx.fillRect(sunX - sunR, y, sunR * 2, thickness);
+    }
+    ctx.restore();
+
+    // Horizon spectrum silhouette
+    ctx.beginPath();
+    ctx.strokeStyle = this.colorAt(1);
+    ctx.shadowColor = this.colorAt(1);
+    ctx.lineWidth = 2.5;
+    ctx.globalAlpha = 0.9;
+    const pts = 48;
+    for (let i = 0; i <= pts; i++) {
+      const idx = Math.floor((i / pts) * (fft.length * 0.5));
+      const val = (fft[idx] / 255) * sensitivity * 70;
+      const x = (i / pts) * w;
+      const y = horizonY - val;
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // Perspective floor grid
+    const gridCol = this.colorAt(0);
+    ctx.strokeStyle = gridCol;
+    ctx.shadowColor = gridCol;
+    ctx.lineWidth = 1.2;
+
+    const vLines = 16;
+    for (let i = -vLines; i <= vLines; i++) {
+      ctx.globalAlpha = 0.35;
+      ctx.beginPath();
+      ctx.moveTo(w / 2 + i * 26, horizonY);
+      ctx.lineTo(w / 2 + i * 190, h);
+      ctx.stroke();
+    }
+
+    const scroll = (this.phase * 0.25) % 1;
+    for (let r = 0; r < 10; r++) {
+      const p = (r + scroll) / 10;
+      const y = horizonY + Math.pow(p, 1.8) * (h - horizonY);
+      ctx.globalAlpha = 0.15 + p * 0.45;
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(w, y);
+      ctx.stroke();
     }
   }
 }

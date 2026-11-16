@@ -38,6 +38,17 @@ const prefs = { ...defaultPrefs, ...JSON.parse(localStorage.getItem("vspotify_pr
 if (prefs.viz === "lasers") prefs.viz = "bars";
 const savePrefs = () => localStorage.setItem("vspotify_prefs", JSON.stringify(prefs));
 
+// Built-in + User-Saved Presets
+const builtInPresets = {
+  Chill: { viz: "vinyl", hud: "minimal", bgStyle: "album-blur", glow: 14, sensitivity: 1.0, smoothing: 0.85, density: 48, eqBass: 1.1, eqMids: 1.0, eqTreble: 0.9 },
+  Concert: { viz: "mirror", hud: "cinema", bgStyle: "pure-black", glow: 28, sensitivity: 1.6, smoothing: 0.65, density: 80, eqBass: 1.5, eqMids: 1.2, eqTreble: 1.4 },
+  Retro: { viz: "synthwave", hud: "centered", bgStyle: "gradient", glow: 22, sensitivity: 1.3, smoothing: 0.75, density: 64, eqBass: 1.3, eqMids: 1.1, eqTreble: 1.2 }
+};
+
+function getSavedPresets() {
+  return { ...builtInPresets, ...JSON.parse(localStorage.getItem("vspotify_presets") || "{}") };
+}
+
 // DOM References
 const bgLayer = document.getElementById("bg-layer");
 const trackArt = document.getElementById("track-art");
@@ -80,7 +91,6 @@ function ensureVisibleAgainstBg(col, bg) {
   }
   const adjusted = { r, g, b };
   if (colorDist(adjusted, bg) < 110) {
-    // Push away from background lightness so it never blends in
     const bgLum = bg.r * 0.299 + bg.g * 0.587 + bg.b * 0.114;
     if (bgLum < 128) {
       r = Math.min(255, r + 95);
@@ -115,8 +125,8 @@ function setPalette(bgHex, vizColors) {
   renderer.setPalette(colors);
 }
 
-// Extract #1 color as fixed background; #2 (and #3 if present) as alternating visualizer colors
 function extractPaletteFromArt(img) {
+  renderer.setArtImage(img);
   if (!prefs.autoColor) return;
   try {
     const c = document.createElement("canvas");
@@ -155,7 +165,6 @@ function extractPaletteFromArt(img) {
 
     if (sorted.length === 0) return;
 
-    // #1 most present color -> fixed background (never alternated)
     const primary = sorted[0];
     const bgScale = (primary.r + primary.g + primary.b) > 380 ? 0.38 : 0.65;
     const bgObj = {
@@ -165,17 +174,15 @@ function extractPaletteFromArt(img) {
     };
     const bgHex = rgbToHex(bgObj.r, bgObj.g, bgObj.b);
 
-    // Pick distinct non-background colors for visualizer lines/bars/waves
     const vizCandidates = [];
     for (const col of sorted.slice(1)) {
-      if (col.count < totalPixels * 0.025) continue; // skip tiny noise specks
+      if (col.count < totalPixels * 0.025) continue;
       if (colorDist(col, primary) < 110 || colorDist(col, bgObj) < 110) continue;
       if (vizCandidates.some((picked) => colorDist(col, picked) < 95)) continue;
       vizCandidates.push(col);
       if (vizCandidates.length === 3) break;
     }
 
-    // If album art only has 2 colors (bg + 1 accent), keep that single color; otherwise alternate
     const vizHexList = vizCandidates.length > 0
       ? vizCandidates.map((col) => ensureVisibleAgainstBg(col, bgObj))
       : [ensureVisibleAgainstBg(sorted[1] || primary, bgObj)];
@@ -190,6 +197,27 @@ function extractPaletteFromArt(img) {
     setPalette(bgHex, vizHexList);
   } catch {
     // Ignore CORS taint if image blocks pixel read
+  }
+}
+
+function syncControlsFromPrefs() {
+  const map = {
+    "opt-auto-color": ["autoColor", true],
+    "opt-accent-color": ["accent", false],
+    "opt-bg-style": ["bgStyle", false],
+    "opt-glow": ["glow", false],
+    "opt-hud-opacity": ["hudOpacity", false],
+    "opt-autohide": ["autohideMs", false],
+    "opt-sensitivity": ["sensitivity", false],
+    "opt-smoothing": ["smoothing", false],
+    "opt-density": ["density", false],
+    "eq-bass": ["eqBass", false],
+    "eq-mids": ["eqMids", false],
+    "eq-treble": ["eqTreble", false]
+  };
+  for (const [id, [key, isCheck]] of Object.entries(map)) {
+    const el = document.getElementById(id);
+    if (el) el[isCheck ? "checked" : "value"] = prefs[key];
   }
 }
 
@@ -293,7 +321,6 @@ document.getElementById("btn-fullscreen").onclick = () => {
   else document.exitFullscreen();
 };
 
-// Wire Tab Audio Capture cleanly (zero-delay FFT when Play Here is active)
 const captureBtn = document.getElementById("btn-capture-audio");
 if (captureBtn) {
   captureBtn.onclick = async () => {
@@ -306,7 +333,6 @@ if (captureBtn) {
   };
 }
 
-// Remove Lasers chip if present in HTML
 document.querySelector('[data-viz="lasers"]')?.remove();
 
 // Add "Play Here" button when browser SDK registers
@@ -328,12 +354,16 @@ if (topActions && !document.getElementById("btn-play-here")) {
   topActions.prepend(playHereBtn);
 }
 
-// Inject Milkdrop, Plasma, and Concert visualizers into quick bar
+// Inject Milkdrop, Plasma, Concert, Vinyl, Warp, Spiral, Synthwave into quick bar
 const vizQuickBar = document.getElementById("viz-quick-bar");
 [
   ["milkdrop", "Milkdrop"],
   ["plasma", "Plasma"],
-  ["mirror", "Concert"]
+  ["mirror", "Concert"],
+  ["vinyl", "Vinyl"],
+  ["warp", "Warp"],
+  ["spiral", "Spiral"],
+  ["synthwave", "Synthwave"]
 ].forEach(([key, label]) => {
   if (!vizQuickBar.querySelector(`[data-viz="${key}"]`)) {
     const chip = document.createElement("button");
@@ -348,6 +378,56 @@ const vizQuickBar = document.getElementById("viz-quick-bar");
     vizQuickBar.appendChild(chip);
   }
 });
+
+// Inject Saveable Presets section into Customize drawer
+const drawerBody = document.querySelector(".drawer-body");
+if (drawerBody && !document.getElementById("preset-section")) {
+  const sec = document.createElement("section");
+  sec.id = "preset-section";
+  sec.className = "control-group";
+  sec.innerHTML = `<h3>Visual Presets</h3><div class="btn-row" id="preset-list"></div><div class="btn-row" style="margin-top:8px"><button id="btn-save-preset" class="glass-pill action-pill">+ Save Current</button></div>`;
+  drawerBody.prepend(sec);
+
+  const renderPresets = () => {
+    const list = document.getElementById("preset-list");
+    list.innerHTML = "";
+    const all = getSavedPresets();
+    Object.keys(all).forEach((name) => {
+      const btn = document.createElement("button");
+      btn.className = "glass-pill action-pill";
+      btn.textContent = name;
+      btn.onclick = () => {
+        Object.assign(prefs, all[name]);
+        savePrefs();
+        syncControlsFromPrefs();
+        applyPrefs();
+      };
+      list.appendChild(btn);
+    });
+  };
+
+  document.getElementById("btn-save-preset").onclick = () => {
+    const name = prompt("Name this preset (e.g. Late Night):")?.trim();
+    if (!name) return;
+    const custom = JSON.parse(localStorage.getItem("vspotify_presets") || "{}");
+    custom[name] = {
+      viz: prefs.viz,
+      hud: prefs.hud,
+      bgStyle: prefs.bgStyle,
+      glow: prefs.glow,
+      sensitivity: prefs.sensitivity,
+      smoothing: prefs.smoothing,
+      density: prefs.density,
+      eqBass: prefs.eqBass,
+      eqMids: prefs.eqMids,
+      eqTreble: prefs.eqTreble
+    };
+    localStorage.setItem("vspotify_presets", JSON.stringify(custom));
+    renderPresets();
+  };
+
+  renderPresets();
+}
 
 // Setup Modal
 const modal = document.getElementById("setup-modal");
@@ -426,7 +506,8 @@ window.addEventListener("keydown", (e) => {
     "6": "matrix",
     "7": "milkdrop",
     "8": "plasma",
-    "9": "mirror"
+    "9": "mirror",
+    "0": "vinyl"
   };
   if (vizMap[e.key]) {
     prefs.viz = vizMap[e.key];

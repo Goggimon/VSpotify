@@ -151,9 +151,18 @@ body.hud-idle .hud-auto-hide {
   align-items: center;
   gap: 2px;
   padding: 4px;
+  max-width: 52vw;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.viz-quick-bar::-webkit-scrollbar {
+  display: none;
 }
 
 .viz-chip {
+  white-space: nowrap;
+  flex-shrink: 0;
   background: transparent;
   border: none;
   color: var(--muted);
