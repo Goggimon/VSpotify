@@ -112,13 +112,13 @@ export class LegacyFXEngine {
     this.liquidInit = false;
   }
 
-  render(mode, ctx, w, h, sample, palette, qualityCfg, thickness, speed, sensitivity, artImage, artScale, showCenterArt) {
+  render(mode, ctx, w, h, sample, palette, qualityCfg, thickness, speed, sensitivity, artImage, artScale, showCenterArt, roles = null) {
     this.phase += (0.016 + (sample.bands.energy || 0) * 0.034) * speed;
     const colorAt = (idx) => palette[idx % palette.length];
 
     switch (mode) {
       case "liquid-spectrum":
-        this.drawLiquidSpectrum(ctx, w, h, sample, colorAt, qualityCfg, thickness, sensitivity);
+        this.drawLiquidSpectrum(ctx, w, h, sample, colorAt, qualityCfg, thickness, sensitivity, roles);
         break;
       case "superscope":
         this.drawSuperScope(ctx, w, h, sample, colorAt, qualityCfg, thickness, sensitivity);
@@ -127,7 +127,7 @@ export class LegacyFXEngine {
         this.drawWireframeCity(ctx, w, h, sample, colorAt, qualityCfg, sensitivity);
         break;
       case "laser-cathedral":
-        this.drawLaserCathedral(ctx, w, h, sample, colorAt, qualityCfg, thickness, sensitivity);
+        this.drawLaserCathedral(ctx, w, h, sample, colorAt, qualityCfg, thickness, sensitivity, roles);
         break;
       case "chromatic-bloom":
         this.drawChromaticBloom(ctx, w, h, sample, colorAt, qualityCfg);
@@ -136,7 +136,7 @@ export class LegacyFXEngine {
         this.drawCrystalEngine(ctx, w, h, sample, colorAt, qualityCfg, artImage, artScale, showCenterArt);
         break;
       case "retro-audio-lab":
-        this.drawRetroAudioLab(ctx, w, h, sample, colorAt, qualityCfg, sensitivity);
+        this.drawRetroAudioLab(ctx, w, h, sample, colorAt, qualityCfg, sensitivity, roles);
         break;
     }
   }
@@ -346,20 +346,23 @@ export class LegacyFXEngine {
   }
 
   // #6: Laser Cathedral — Vaulted bass arches, volumetric additive beams, and horizon haze
-  drawLaserCathedral(ctx, w, h, { fft, bands }, colorAt, q, thickness, sensitivity) {
+  drawLaserCathedral(ctx, w, h, { fft, bands }, colorAt, q, thickness, sensitivity, roles = null) {
     const cx = w * 0.5;
     const minDim = Math.min(w, h);
     const beams = q.tier === 0 ? 5 : q.tier === 1 ? 8 : 12;
     const arches = q.tier === 0 ? 1 : 3;
+    const beamCol = roles?.visualPrimary || colorAt(0);
+    const archCol = roles?.visualSecondary || colorAt(1);
+    const peakCol = roles?.highlight || colorAt(2);
 
     ctx.save();
     if (q.secondaryLayers) {
       ctx.globalCompositeOperation = "lighter";
     }
 
-    // Vaulted cathedral bass arches
+    // Vaulted cathedral bass arches (visualSecondary)
     for (let a = 0; a < arches; a++) {
-      const col = colorAt(a);
+      const col = bands.bass > 0.72 && a === 0 ? peakCol : archCol;
       const r = minDim * (0.36 + a * 0.14 + bands.bass * (0.1 + a * 0.03));
       ctx.strokeStyle = col;
       ctx.shadowColor = col;
@@ -370,7 +373,7 @@ export class LegacyFXEngine {
       ctx.stroke();
     }
 
-    // Symmetrical volumetric beam arrays
+    // Symmetrical volumetric beam arrays (visualPrimary, highlight at beat peaks)
     const apexY = h * 0.03;
     for (let i = 0; i < beams; i++) {
       const t = i / Math.max(1, beams - 1);
@@ -381,7 +384,7 @@ export class LegacyFXEngine {
       const sway = Math.sin(this.phase * 0.85 + i * 0.38) * (0.07 + bands.treble * 0.2);
       const ang = spread + sway;
       const dx = Math.sin(ang) * w * 0.68;
-      const col = colorAt(i);
+      const col = val > 0.82 && bands.bass > 0.65 ? peakCol : (i % 3 === 2 ? archCol : beamCol);
 
       // Soft volumetric cone (Tier 1+)
       if (q.secondaryLayers) {

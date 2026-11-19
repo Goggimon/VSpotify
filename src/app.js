@@ -4,7 +4,8 @@ import { VisualizerRenderer } from "./visualizers.js";
 import { PerformanceGovernor } from "./viz-governor.js";
 import { VISUALIZER_REGISTRY, SUPERSCOPE_EQUATIONS } from "./viz-legacy.js";
 import { LyricsController } from "./lyrics.js";
-import { LYRIC_STYLES, LYRIC_STYLE_MAP } from "./lyrics-layouts.js";
+import { LYRIC_STYLES, LYRIC_STYLE_MAP, resolveLyricStyleId } from "./lyrics-layouts.js";
+import { extractAlbumPalette, buildManualPalette, applyPaletteToDocument } from "./palette.js";
 
 const APP_VERSION = "v3.0.0";
 
@@ -14,6 +15,20 @@ const VIZ_BY_ID = new Map(VISUALIZER_REGISTRY.map((v) => [v.id, v]));
 
 let fallbackFromViz = null;
 let lastAppliedViz = null;
+let currentArtUrl = "";
+let surpriseDeck = [];
+let webglSupportedCache = null;
+
+function supportsWebGL() {
+  if (webglSupportedCache !== null) return webglSupportedCache;
+  try {
+    const c = document.createElement("canvas");
+    webglSupportedCache = Boolean(c.getContext("webgl2") || c.getContext("webgl"));
+  } catch {
+    webglSupportedCache = false;
+  }
+  return webglSupportedCache;
+}
 
 function handleVizFallback() {
   if (prefs.viz === "retro-audio-lab") return;
@@ -44,20 +59,12 @@ if (!favicon) {
 }
 favicon.href = `data:image/svg+xml,${encodeURIComponent(prismSvg)}`;
 
+// 5 Signature Connected Scene Previews
 const SCENE_PREVIEWS = {
   "connected-zigzag": `<svg viewBox="0 0 48 28"><path d="M8 6 L36 14 L12 22" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="24" cy="10" r="2.2" fill="currentColor"/></svg>`,
-  "constellation": `<svg viewBox="0 0 48 28"><path d="M10 18 L24 8 L38 16" fill="none" stroke="currentColor" stroke-width="1" stroke-dasharray="2 2"/><circle cx="10" cy="18" r="2" fill="currentColor"/><circle cx="24" cy="8" r="2.5" fill="currentColor"/><circle cx="38" cy="16" r="2" fill="currentColor"/></svg>`,
-  "editorial": `<svg viewBox="0 0 48 28"><rect x="6" y="6" width="22" height="3" rx="1.5" fill="currentColor" opacity="0.4"/><rect x="6" y="12" width="36" height="5" rx="2" fill="currentColor"/><rect x="6" y="20" width="26" height="3" rx="1.5" fill="currentColor" opacity="0.4"/></svg>`,
-  "floating-cards": `<svg viewBox="0 0 48 28"><rect x="10" y="4" width="28" height="7" rx="3" fill="currentColor" opacity="0.25"/><rect x="6" y="11" width="36" height="8" rx="3" fill="currentColor" opacity="0.75"/><rect x="12" y="20" width="24" height="5" rx="2.5" fill="currentColor" opacity="0.25"/></svg>`,
-  "orbital-type": `<svg viewBox="0 0 48 28"><circle cx="24" cy="14" r="5" fill="currentColor" opacity="0.35"/><path d="M10 8 Q24 2 38 8" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 20 Q24 26 40 20" fill="none" stroke="currentColor" stroke-width="2"/></svg>`,
-  "kinetic-poster": `<svg viewBox="0 0 48 28"><rect x="8" y="9" width="32" height="10" rx="2.5" fill="currentColor"/></svg>`,
-  "ribbon-flow": `<svg viewBox="0 0 48 28"><path d="M4 9 Q24 4 44 10" fill="none" stroke="currentColor" stroke-width="1.4" opacity="0.4"/><path d="M4 15 Q24 20 44 14" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M4 21 Q24 17 44 22" fill="none" stroke="currentColor" stroke-width="1.4" opacity="0.4"/></svg>`,
-  "typewriter-drift": `<svg viewBox="0 0 48 28"><rect x="8" y="11" width="26" height="5" rx="1" fill="currentColor"/><rect x="36" y="10" width="2" height="7" fill="currentColor" opacity="0.7"/></svg>`,
   "subtitles-reimagined": `<svg viewBox="0 0 48 28"><rect x="8" y="15" width="32" height="4" rx="2" fill="currentColor"/><rect x="14" y="21" width="20" height="2.5" rx="1.2" fill="currentColor" opacity="0.45"/></svg>`,
-  "lyric-wall": `<svg viewBox="0 0 48 28"><rect x="6" y="5" width="16" height="7" rx="2" fill="currentColor" opacity="0.3"/><rect x="26" y="5" width="16" height="7" rx="2" fill="currentColor" opacity="0.85"/><rect x="6" y="15" width="16" height="7" rx="2" fill="currentColor" opacity="0.3"/><rect x="26" y="15" width="16" height="7" rx="2" fill="currentColor" opacity="0.3"/></svg>`,
-  "split-horizon": `<svg viewBox="0 0 48 28"><line x1="4" y1="14" x2="44" y2="14" stroke="currentColor" stroke-width="1" opacity="0.5"/><rect x="12" y="6" width="24" height="3" rx="1.5" fill="currentColor" opacity="0.35"/><rect x="8" y="18" width="32" height="4.5" rx="2" fill="currentColor"/></svg>`,
-  "paper-cut": `<svg viewBox="0 0 48 28"><rect x="10" y="9" width="30" height="10" rx="2" fill="currentColor" opacity="0.25"/><rect x="8" y="7" width="30" height="10" rx="2" fill="currentColor"/></svg>`,
-  "tunnel": `<svg viewBox="0 0 48 28"><rect x="17" y="5" width="14" height="2.5" rx="1" fill="currentColor" opacity="0.3"/><rect x="12" y="10" width="24" height="3.5" rx="1.5" fill="currentColor" opacity="0.55"/><rect x="6" y="17" width="36" height="5" rx="2" fill="currentColor"/></svg>`,
+  "editorial": `<svg viewBox="0 0 48 28"><rect x="6" y="6" width="22" height="3" rx="1.5" fill="currentColor" opacity="0.4"/><rect x="6" y="12" width="36" height="5" rx="2" fill="currentColor"/><rect x="6" y="20" width="26" height="3" rx="1.5" fill="currentColor" opacity="0.4"/></svg>`,
+  "constellation": `<svg viewBox="0 0 48 28"><path d="M10 18 L24 8 L38 16" fill="none" stroke="currentColor" stroke-width="1" stroke-dasharray="2 2"/><circle cx="10" cy="18" r="2" fill="currentColor"/><circle cx="24" cy="8" r="2.5" fill="currentColor"/><circle cx="38" cy="16" r="2" fill="currentColor"/></svg>`,
   "neon-thread": `<svg viewBox="0 0 48 28"><path d="M10 7 C24 7 24 14 36 14 C24 14 24 21 12 21" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>`
 };
 
@@ -67,37 +74,39 @@ const CURATED_COMBOS = [
     id: "Velvet Route",
     subtitle: "Aurora + Connected Zigzag",
     viz: "aurora",
-    lyrics: { enabled: true, style: "connected-zigzag", bgMode: "album-aura", bgMotion: "medium", motionIntensity: 1.0, contrast: "balanced", fontTreatment: "sans" }
+    lyrics: { enabled: true, style: "connected-zigzag", sceneFlow: "adaptive", flowMotion: "balanced", bgMode: "album-aura", bgMotion: "medium", motionIntensity: 1.0, contrast: "balanced", fontTreatment: "sans" }
   },
   {
     id: "Neon Transit",
     subtitle: "Laser Cathedral + Neon Thread",
     viz: "laser-cathedral",
-    lyrics: { enabled: true, style: "neon-thread", bgMode: "pulse-halo", bgMotion: "medium", motionIntensity: 1.0, contrast: "balanced", fontTreatment: "sans" }
+    lyrics: { enabled: true, style: "neon-thread", sceneFlow: "adaptive", flowMotion: "expressive", bgMode: "pulse-halo", bgMotion: "medium", motionIntensity: 1.0, contrast: "balanced", fontTreatment: "sans" }
   },
   {
     id: "Deep Space",
     subtitle: "Fractal Tunnel + Constellation",
     viz: "fractal-tunnel",
-    lyrics: { enabled: true, style: "constellation", bgMode: "night-sky", bgMotion: "low", textWidth: 0.85, contrast: "balanced", fontTreatment: "sans" }
+    lyrics: { enabled: true, style: "constellation", sceneFlow: "adaptive", flowMotion: "calm", bgMode: "night-sky", bgMotion: "low", textWidth: 0.85, contrast: "balanced", fontTreatment: "sans" }
   },
   {
     id: "Gallery Night",
     subtitle: "Kaleidoscope + Editorial",
     viz: "kaleidoscope",
-    lyrics: { enabled: true, style: "editorial", bgMode: "grain-vignette", bgMotion: "off", motionIntensity: 0.35, contrast: "crisp", fontTreatment: "serif" }
+    lyrics: { enabled: true, style: "editorial", sceneFlow: "adaptive", flowMotion: "calm", bgMode: "grain-vignette", bgMotion: "off", motionIntensity: 0.45, contrast: "crisp", fontTreatment: "serif" }
   },
   {
     id: "Analog Room",
-    subtitle: "Retro Audio Lab + Subtitles",
+    subtitle: "Retro Audio Lab + Cinema Captions",
     viz: "retro-audio-lab",
-    lyrics: { enabled: true, style: "subtitles-reimagined", bgMode: "adaptive", bgMotion: "low", motionIntensity: 0.4, contrast: "crisp", fontTreatment: "sans" }
+    lyrics: { enabled: true, style: "subtitles-reimagined", sceneFlow: "fixed", flowMotion: "calm", bgMode: "adaptive", bgMotion: "low", motionIntensity: 0.45, contrast: "crisp", fontTreatment: "sans" }
   }
 ];
 
 const defaultLyricsPrefs = {
   enabled: true,
   style: "connected-zigzag",
+  sceneFlow: "adaptive",
+  flowMotion: "balanced",
   sourcePriority: "lrclib-first",
   bgMode: "adaptive",
   bgMotion: "medium",
@@ -120,15 +129,18 @@ const defaultPrefs = {
   perfMode: "balanced",
   scopeEquation: "infinity",
   surpriseRotate: false,
+  surpriseFavoritesOnly: false,
   favorites: ["bars", "aurora", "fractal-tunnel", "retro-audio-lab"],
   lyricFocus: false,
   vizIntensity: "balanced",
-  autoColor: true,
-  smartIdleArt: true,
+  themeColorMode: "album-palette", // album-palette | manual
+  artAnchor: "adaptive", // adaptive | center | corner | ambient | hidden
+  artScale: 1.0,
+  artIntensity: "balanced", // subtle | balanced | bold
   themeMode: "obsidian",
   accent: "#e4e4e7",
-  palette: ["#e4e4e7", "#a1a1aa"],
   bgColor: "#08080a",
+  paletteRoles: buildManualPalette("#e4e4e7", "#08080a"),
   bgStyle: "album-blur",
   glow: 18,
   hudOpacity: 0.94,
@@ -138,7 +150,6 @@ const defaultPrefs = {
   density: 64,
   thickness: 2.6,
   speed: 1.0,
-  artScale: 1.0,
   eqBass: 1.2,
   eqMids: 1.0,
   eqTreble: 1.1,
@@ -146,13 +157,22 @@ const defaultPrefs = {
 };
 
 const stored = JSON.parse(localStorage.getItem("vspotify_prefs") || "{}");
+const migratedColorMode = stored.themeColorMode || (stored.autoColor === false ? "manual" : "album-palette");
 const prefs = {
   ...defaultPrefs,
   ...stored,
+  themeColorMode: migratedColorMode,
   favorites: Array.isArray(stored.favorites) ? stored.favorites : defaultPrefs.favorites,
-  lyrics: { ...defaultLyricsPrefs, ...(stored.lyrics || {}) }
+  lyrics: {
+    ...defaultLyricsPrefs,
+    ...(stored.lyrics || {}),
+    style: resolveLyricStyleId(stored.lyrics?.style || defaultLyricsPrefs.style)
+  }
 };
 if (!VIZ_BY_ID.has(prefs.viz)) prefs.viz = "bars";
+if (!prefs.paletteRoles || !prefs.paletteRoles.visualPrimary) {
+  prefs.paletteRoles = buildManualPalette(prefs.accent, prefs.bgColor);
+}
 const savePrefs = () => localStorage.setItem("vspotify_prefs", JSON.stringify(prefs));
 
 // DOM References
@@ -183,7 +203,7 @@ function showToast(msg) {
   perfToast.textContent = msg;
   perfToast.classList.add("visible");
   clearTimeout(perfToastTimer);
-  perfToastTimer = setTimeout(() => perfToast.classList.remove("visible"), 4500);
+  perfToastTimer = setTimeout(() => perfToast.classList.remove("visible"), 4000);
 }
 
 function showFallbackToast(origId, origName) {
@@ -231,6 +251,7 @@ const lyrics = new LyricsController({
     const hasActiveLyrics = prefs.lyrics.enabled && (state === "ready-timed" || state === "ready-static" || state === "imported");
     document.body.classList.toggle("lyrics-hero-active", hasActiveLyrics);
     updateSceneCapsule();
+    updateSmartArtPlacement();
   }
 });
 
@@ -243,7 +264,7 @@ function updateSceneCapsule() {
     if (!prefs.lyrics.enabled) {
       sceneCapsuleText.textContent = `${vizMeta.name} · Visual Only`;
     } else {
-      const styleObj = LYRIC_STYLE_MAP.get(prefs.lyrics.style);
+      const styleObj = LYRIC_STYLE_MAP.get(resolveLyricStyleId(prefs.lyrics.style));
       sceneCapsuleText.textContent = `${vizMeta.name} · ${styleObj ? styleObj.name : "Lyrics"}`;
     }
   }
@@ -255,150 +276,84 @@ function formatTime(ms) {
   return `${m}:${(s % 60).toString().padStart(2, "0")}`;
 }
 
-function rgbToHex(r, g, b) {
-  const clamp = (n) => Math.max(0, Math.min(255, Math.round(n))).toString(16).padStart(2, "0");
-  return `#${clamp(r)}${clamp(g)}${clamp(b)}`;
-}
-
-function colorDist(c1, c2) {
-  return Math.abs(c1.r - c2.r) + Math.abs(c1.g - c2.g) + Math.abs(c1.b - c2.b);
-}
-
-function ensureVisibleAgainstBg(col, bg) {
-  let { r, g, b } = col;
-  const lum = r * 0.299 + g * 0.587 + b * 0.114;
-  if (lum < 125) {
-    const boost = 165 / Math.max(25, lum);
-    r = Math.min(255, r * boost);
-    g = Math.min(255, g * boost);
-    b = Math.min(255, b * boost);
-  }
-  const adjusted = { r, g, b };
-  if (colorDist(adjusted, bg) < 115) {
-    const bgLum = bg.r * 0.299 + bg.g * 0.587 + bg.b * 0.114;
-    const delta = bgLum < 128 ? 100 : -100;
-    r = Math.max(0, Math.min(255, r + delta));
-    g = Math.max(0, Math.min(255, g + delta));
-    b = Math.max(0, Math.min(255, b + delta));
-  }
-  return rgbToHex(r, g, b);
-}
-
-function setPalette(bgHex, vizColors) {
-  const colors = Array.isArray(vizColors) && vizColors.length > 0 ? vizColors : [prefs.accent];
-  const primaryAccent = colors[0];
-  document.documentElement.style.setProperty("--bg-primary", bgHex);
-  document.documentElement.style.setProperty("--accent", primaryAccent);
-
-  const r = parseInt(primaryAccent.slice(1, 3), 16);
-  const g = parseInt(primaryAccent.slice(3, 5), 16);
-  const b = parseInt(primaryAccent.slice(5, 7), 16);
-  document.documentElement.style.setProperty("--accent-rgb", `${r}, ${g}, ${b}`);
-
-  const br = parseInt(bgHex.slice(1, 3), 16);
-  const bg = parseInt(bgHex.slice(3, 5), 16);
-  const bb = parseInt(bgHex.slice(5, 7), 16);
-  document.documentElement.style.setProperty("--bg-primary-rgb", `${br}, ${bg}, ${bb}`);
-
-  renderer.setPalette(colors);
-  lyrics.updateSceneContext({ palette: colors, bgColor: bgHex });
+function applyThemePalette(roles) {
+  const activeRoles = roles || buildManualPalette(prefs.accent, prefs.bgColor || "#08080a");
+  applyPaletteToDocument(activeRoles);
+  const vizColors = [activeRoles.visualPrimary, activeRoles.visualSecondary, activeRoles.highlight];
+  renderer.setPalette(vizColors);
+  renderer.setPaletteRoles(activeRoles);
+  lyrics.updateSceneContext({ palette: vizColors, bgColor: activeRoles.background });
 }
 
 function analyzeAlbumArtUrl(url) {
+  currentArtUrl = url;
   const probe = new Image();
   probe.crossOrigin = "anonymous";
   probe.onload = () => {
     renderer.setArtImage(probe);
-    if (!prefs.autoColor) return;
-    try {
-      const c = document.createElement("canvas");
-      c.width = 40;
-      c.height = 40;
-      const x = c.getContext("2d");
-      x.drawImage(probe, 0, 0, 40, 40);
-      const data = x.getImageData(0, 0, 40, 40).data;
+    if (prefs.themeColorMode !== "album-palette") return;
+    const roles = extractAlbumPalette(probe);
+    if (!roles) return;
+    prefs.paletteRoles = roles;
+    prefs.bgColor = roles.background;
+    prefs.accent = roles.visualPrimary;
+    savePrefs();
 
-      const buckets = new Map();
-      for (let i = 0; i < data.length; i += 4) {
-        const r = data[i];
-        const g = data[i + 1];
-        const b = data[i + 2];
-        const key = `${Math.round(r / 24) * 24},${Math.round(g / 24) * 24},${Math.round(b / 24) * 24}`;
-        const entry = buckets.get(key) || { r: 0, g: 0, b: 0, count: 0 };
-        entry.r += r;
-        entry.g += g;
-        entry.b += b;
-        entry.count++;
-        buckets.set(key, entry);
-      }
-
-      const sorted = Array.from(buckets.values())
-        .map((e) => ({ r: e.r / e.count, g: e.g / e.count, b: e.b / e.count, count: e.count }))
-        .sort((a, b) => b.count - a.count);
-      if (sorted.length === 0) return;
-
-      const primary = sorted[0];
-      const pLum = primary.r * 0.299 + primary.g * 0.587 + primary.b * 0.114;
-      const bgScale = pLum > 140 ? 0.48 : pLum < 35 ? 1.5 : 0.78;
-      const bgObj = {
-        r: Math.min(255, primary.r * bgScale),
-        g: Math.min(255, primary.g * bgScale),
-        b: Math.min(255, primary.b * bgScale)
-      };
-      const bgHex = rgbToHex(bgObj.r, bgObj.g, bgObj.b);
-
-      const vizCandidates = [];
-      for (const col of sorted.slice(1)) {
-        if (col.count < 32) continue;
-        if (colorDist(col, primary) < 105 || colorDist(col, bgObj) < 110) continue;
-        if (vizCandidates.some((picked) => colorDist(col, picked) < 90)) continue;
-        vizCandidates.push(col);
-        if (vizCandidates.length === 3) break;
-      }
-
-      const vizHexList = vizCandidates.length > 0
-        ? vizCandidates.map((col) => ensureVisibleAgainstBg(col, bgObj))
-        : [ensureVisibleAgainstBg(sorted[1] || primary, bgObj)];
-
-      prefs.bgColor = bgHex;
-      prefs.accent = vizHexList[0];
-      prefs.palette = vizHexList;
-
-      const accentInput = document.getElementById("opt-accent-color");
-      if (accentInput) accentInput.value = vizHexList[0];
-      setPalette(bgHex, vizHexList);
-    } catch {
-      // Ignore CORS taint
-    }
+    const accentInput = document.getElementById("opt-accent-color");
+    if (accentInput) accentInput.value = roles.visualPrimary;
+    applyThemePalette(roles);
   };
   probe.src = url;
 }
 
-let cornerDock = document.getElementById("idle-corner-dock");
-if (!cornerDock) {
-  cornerDock = document.createElement("div");
-  cornerDock.id = "idle-corner-dock";
-  cornerDock.className = "idle-corner-dock";
-  cornerDock.innerHTML = `<img id="idle-art" alt="Art" /><div class="idle-meta"><div id="idle-title"></div><div id="idle-artist"></div></div>`;
-  document.body.appendChild(cornerDock);
+// Adaptive Album Art Anchors (Corner Tile + Soft Ambient Disc)
+let artCornerAnchor = document.getElementById("art-corner-anchor");
+if (!artCornerAnchor) {
+  artCornerAnchor = document.createElement("div");
+  artCornerAnchor.id = "art-corner-anchor";
+  artCornerAnchor.className = "art-corner-anchor";
+  artCornerAnchor.innerHTML = `<img id="art-corner-img" alt="Album Art" />`;
+  document.body.appendChild(artCornerAnchor);
+}
+
+let artAmbientAnchor = document.getElementById("art-ambient-anchor");
+if (!artAmbientAnchor) {
+  artAmbientAnchor = document.createElement("div");
+  artAmbientAnchor.id = "art-ambient-anchor";
+  artAmbientAnchor.className = "art-ambient-anchor";
+  artAmbientAnchor.innerHTML = `<img id="art-ambient-img" alt="Ambient Album Art" />`;
+  document.body.appendChild(artAmbientAnchor);
 }
 
 function updateSmartArtPlacement() {
   const isIdle = document.body.classList.contains("hud-idle");
-  const isIdleOrFull = isIdle || Boolean(document.fullscreenElement);
-
+  const hasArt = Boolean(currentArtUrl);
+  const hasActiveLyrics = document.body.classList.contains("lyrics-hero-active") && prefs.lyrics.enabled;
   const centeredViz = renderer.isCenteredArtMode();
-  const showCenter = Boolean(
-    prefs.smartIdleArt &&
-    isIdleOrFull &&
-    centeredViz &&
-    (!prefs.lyrics.enabled || prefs.lyrics.showAlbumArt) &&
-    !prefs.lyricFocus
-  );
-  renderer.showCenterArt = showCenter;
 
-  const showCorner = Boolean(prefs.smartIdleArt && isIdleOrFull && !centeredViz && prefs.hud !== "hidden");
-  cornerDock.classList.toggle("visible", showCorner);
+  let effectiveAnchor = prefs.artAnchor || "adaptive";
+  if (effectiveAnchor === "adaptive") {
+    if (hasActiveLyrics || prefs.lyricFocus) {
+      effectiveAnchor = "ambient";
+    } else if (centeredViz && prefs.hud !== "centered") {
+      effectiveAnchor = "center";
+    } else {
+      effectiveAnchor = "corner";
+    }
+  } else if (effectiveAnchor === "center" && hasActiveLyrics && prefs.lyrics.placement !== "lower") {
+    // Protect primary lyrics from being covered
+    effectiveAnchor = "ambient";
+  }
+
+  const showCenter = Boolean(effectiveAnchor === "center" && hasArt);
+  const showCorner = Boolean(effectiveAnchor === "corner" && hasArt);
+  const showAmbient = Boolean(effectiveAnchor === "ambient" && hasArt);
+
+  renderer.showCenterArt = showCenter;
+  artCornerAnchor.classList.toggle("visible", showCorner);
+  artAmbientAnchor.classList.toggle("visible", showAmbient);
+
+  document.documentElement.style.setProperty("--art-scale", String(Number(prefs.artScale) || 1));
 
   lyrics.updateSceneContext({
     hudMode: prefs.hud,
@@ -481,22 +436,50 @@ function renderVisualizerBrowser() {
       } else {
         prefs.favorites.push(id);
       }
+      surpriseDeck = [];
       savePrefs();
       renderVisualizerBrowser();
     });
   });
 }
 
+// Shuffle-bag Surprise Me over full VISUALIZER_REGISTRY (skipping unsupported WebGL)
+function buildSurpriseDeck() {
+  const canWebGL = supportsWebGL();
+  let pool = VISUALIZER_REGISTRY.filter((v) => canWebGL || v.tech !== "WebGL");
+  if (prefs.surpriseFavoritesOnly) {
+    const favPool = pool.filter((v) => prefs.favorites.includes(v.id));
+    if (favPool.length >= 2) pool = favPool;
+  }
+  const deck = pool.map((v) => v.id);
+  for (let i = deck.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [deck[i], deck[j]] = [deck[j], deck[i]];
+  }
+  // Guarantee first popped item (deck[deck.length - 1]) != current visualizer
+  if (deck.length > 1 && deck[deck.length - 1] === prefs.viz) {
+    [deck[0], deck[deck.length - 1]] = [deck[deck.length - 1], deck[0]];
+  }
+  return deck;
+}
+
 function triggerSurpriseMe() {
-  const pool = prefs.favorites.length >= 3
-    ? VISUALIZER_REGISTRY.filter((v) => prefs.favorites.includes(v.id) && v.id !== prefs.viz)
-    : VISUALIZER_REGISTRY.filter((v) => v.id !== prefs.viz);
-  const pick = pool[Math.floor(Math.random() * pool.length)] || VISUALIZER_REGISTRY[0];
+  if (surpriseDeck.length === 0) {
+    surpriseDeck = buildSurpriseDeck();
+  }
+  let nextId = surpriseDeck.pop();
+  if (nextId === prefs.viz && surpriseDeck.length > 0) {
+    const alt = surpriseDeck.pop();
+    surpriseDeck.unshift(nextId);
+    nextId = alt;
+  }
+  const pick = VIZ_BY_ID.get(nextId) || VISUALIZER_REGISTRY[0];
   prefs.viz = pick.id;
   savePrefs();
   syncControlsFromPrefs();
   applyPrefs();
   renderVisualizerBrowser();
+  showToast(`Surprise Me · ${pick.name}`);
 }
 
 // Build 4-Section Progressive Customization Drawer
@@ -529,11 +512,23 @@ function buildDrawerUI() {
       <h3>Scene</h3>
       <label class="toggle-row"><span>Enable Lyrics</span><input type="checkbox" class="switch" id="lyr-enabled" /></label>
       <div class="mood-grid" id="mood-grid">${comboCardsHtml}</div>
-      <details class="progressive-details">
-        <summary>Browse all 14 lyric scenes</summary>
-        <div class="scene-grid" id="scene-grid">${styleCardsHtml}</div>
-      </details>
+      <div class="scene-grid" id="scene-grid">${styleCardsHtml}</div>
       <label class="select-row" style="margin-top:10px">
+        <span>Scene Flow</span>
+        <select id="lyr-scene-flow">
+          <option value="adaptive">Adaptive (Verse / Chorus / Break)</option>
+          <option value="fixed">Fixed</option>
+        </select>
+      </label>
+      <label class="select-row">
+        <span>Flow Motion</span>
+        <select id="lyr-flow-motion">
+          <option value="calm">Calm</option>
+          <option value="balanced">Balanced</option>
+          <option value="expressive">Expressive</option>
+        </select>
+      </label>
+      <label class="select-row">
         <span>Placement</span>
         <select id="lyr-placement">
           <option value="adaptive">Adaptive</option>
@@ -554,6 +549,33 @@ function buildDrawerUI() {
           <option value="cinematic">Cinematic</option>
           <option value="balanced">Balanced</option>
           <option value="battery-saver">Battery Saver</option>
+        </select>
+      </label>
+      <label class="select-row">
+        <span>Color Theme</span>
+        <select id="opt-theme-color-mode">
+          <option value="album-palette">Album Palette</option>
+          <option value="manual">Manual Accent</option>
+        </select>
+      </label>
+      <label class="slider-row"><span>Manual Accent</span><input type="color" id="opt-accent-color" /></label>
+      <label class="select-row">
+        <span>Album Art</span>
+        <select id="opt-art-anchor">
+          <option value="adaptive">Adaptive</option>
+          <option value="center">Center</option>
+          <option value="corner">Corner</option>
+          <option value="ambient">Ambient</option>
+          <option value="hidden">Hidden</option>
+        </select>
+      </label>
+      <label class="slider-row"><span>Art Scale</span><input type="range" id="opt-art-scale" min="0.7" max="1.4" step="0.05" /></label>
+      <label class="select-row">
+        <span>Art Intensity</span>
+        <select id="opt-art-intensity">
+          <option value="subtle">Subtle</option>
+          <option value="balanced">Balanced</option>
+          <option value="bold">Bold</option>
         </select>
       </label>
       <label class="select-row">
@@ -591,6 +613,7 @@ function buildDrawerUI() {
           <label class="select-row"><span>Audio Visualizer</span><select id="opt-viz-select">${vizOptions}</select></label>
           <label class="select-row"><span>SuperScope Equation</span><select id="opt-scope-eq">${eqOptions}</select></label>
           <label class="toggle-row"><span>Surprise Me on Track Change</span><input type="checkbox" class="switch" id="opt-surprise-rotate" /></label>
+          <label class="toggle-row"><span>Surprise Me: Favorites Only</span><input type="checkbox" class="switch" id="opt-surprise-favs" /></label>
           <div class="segmented-row" id="hud-selector" style="margin-bottom:10px">
             <button type="button" class="seg-btn" data-hud="cinema">Cinema</button>
             <button type="button" class="seg-btn" data-hud="minimal">Minimal</button>
@@ -598,8 +621,6 @@ function buildDrawerUI() {
             <button type="button" class="seg-btn" data-hud="hidden">Hidden</button>
           </div>
           <label class="select-row"><span>Surface Finish</span><select id="opt-theme-mode"><option value="obsidian">Obsidian Glass</option><option value="warm">Warm Espresso</option></select></label>
-          <label class="toggle-row"><span>Auto-match Album Art</span><input type="checkbox" class="switch" id="opt-auto-color" /></label>
-          <label class="slider-row"><span>Manual Accent</span><input type="color" id="opt-accent-color" /></label>
         </div>
       </details>
     </section>
@@ -636,8 +657,6 @@ function buildDrawerUI() {
             <button type="button" id="btn-demo-synth" class="glass-pill action-pill">Demo Scene</button>
             <label class="glass-pill action-pill file-label">Local Audio<input type="file" id="input-local-audio" accept="audio/*" hidden /></label>
           </div>
-          <label class="toggle-row"><span>Show Center Art in Scenes</span><input type="checkbox" class="switch" id="lyr-show-art" /></label>
-          <label class="toggle-row"><span>Smart Fullscreen Art</span><input type="checkbox" class="switch" id="opt-smart-art" /></label>
           <label class="select-row"><span>Reduced Motion</span><select id="lyr-reduced-motion"><option value="system">System</option><option value="reduce">Reduce</option><option value="full">Full</option></select></label>
           <label class="slider-row"><span>Motion Intensity</span><input type="range" id="lyr-motion" min="0" max="1.5" step="0.1" /></label>
           <label class="slider-row"><span>Connector Glow</span><input type="range" id="lyr-connector" min="0.2" max="2" step="0.1" /></label>
@@ -654,9 +673,12 @@ function buildDrawerUI() {
 
 function syncControlsFromPrefs() {
   const map = {
-    "opt-auto-color": ["autoColor", true],
-    "opt-smart-art": ["smartIdleArt", true],
+    "opt-theme-color-mode": ["themeColorMode", false],
+    "opt-art-anchor": ["artAnchor", false],
+    "opt-art-scale": ["artScale", false],
+    "opt-art-intensity": ["artIntensity", false],
     "opt-surprise-rotate": ["surpriseRotate", true],
+    "opt-surprise-favs": ["surpriseFavoritesOnly", true],
     "opt-accent-color": ["accent", false],
     "opt-theme-mode": ["themeMode", false],
     "opt-perf-mode": ["perfMode", false],
@@ -676,6 +698,8 @@ function syncControlsFromPrefs() {
 
   const lyrMap = {
     "lyr-enabled": ["enabled", true],
+    "lyr-scene-flow": ["sceneFlow", false],
+    "lyr-flow-motion": ["flowMotion", false],
     "lyr-source": ["sourcePriority", false],
     "lyr-bg-mode": ["bgMode", false],
     "lyr-bg-motion": ["bgMotion", false],
@@ -686,7 +710,6 @@ function syncControlsFromPrefs() {
     "lyr-placement": ["placement", false],
     "lyr-motion": ["motionIntensity", false],
     "lyr-connector": ["connectorStrength", false],
-    "lyr-show-art": ["showAlbumArt", true],
     "lyr-offset": ["offsetMs", false],
     "lyr-follow": ["followPlayback", true],
     "lyr-reduced-motion": ["reducedMotion", false]
@@ -696,8 +719,9 @@ function syncControlsFromPrefs() {
     if (el) el[isCheck ? "checked" : "value"] = prefs.lyrics[key];
   }
 
+  const activeStyle = resolveLyricStyleId(prefs.lyrics.style);
   document.querySelectorAll(".scene-card").forEach((el) => {
-    el.classList.toggle("active", el.dataset.sceneId === prefs.lyrics.style);
+    el.classList.toggle("active", el.dataset.sceneId === activeStyle);
   });
 }
 
@@ -715,7 +739,7 @@ function applyPrefs() {
   renderer.sensitivity = Number(prefs.sensitivity);
   renderer.thickness = Number(prefs.thickness);
   renderer.speed = Number(prefs.speed);
-  renderer.artScale = Number(prefs.artScale);
+  renderer.artScale = Number(prefs.artScale) || 1.0;
 
   audio.setSensitivity(Number(prefs.sensitivity));
   audio.setSmoothing(Number(prefs.smoothing));
@@ -723,13 +747,16 @@ function applyPrefs() {
 
   document.documentElement.style.setProperty("--glow", `${prefs.glow}px`);
   document.documentElement.style.setProperty("--hud-opacity", prefs.hudOpacity);
-  const colors = prefs.autoColor && Array.isArray(prefs.palette) ? prefs.palette : [prefs.accent];
-  setPalette(prefs.bgColor || "#08080a", colors);
+
+  const roles = prefs.themeColorMode === "album-palette" && prefs.paletteRoles
+    ? prefs.paletteRoles
+    : buildManualPalette(prefs.accent, prefs.bgColor || "#08080a");
+  applyThemePalette(roles);
 
   const idleKeep = document.body.classList.contains("hud-idle") ? " hud-idle" : "";
   const heroKeep = document.body.classList.contains("lyrics-hero-active") ? " lyrics-hero-active" : "";
   const focusKeep = prefs.lyricFocus ? " lyric-focus" : "";
-  document.body.className = `hud-${prefs.hud} bg-${prefs.bgStyle} theme-${prefs.themeMode} viz-int-${prefs.vizIntensity}${idleKeep}${heroKeep}${focusKeep}`;
+  document.body.className = `hud-${prefs.hud} bg-${prefs.bgStyle} theme-${prefs.themeMode} viz-int-${prefs.vizIntensity} art-int-${prefs.artIntensity || "balanced"}${idleKeep}${heroKeep}${focusKeep}`;
 
   if (btnLyricFocus) {
     btnLyricFocus.setAttribute("aria-pressed", String(Boolean(prefs.lyricFocus)));
@@ -764,8 +791,6 @@ const spotify = new SpotifyBridge({
   onTrackUpdate: (track) => {
     trackTitle.textContent = track.name;
     trackArtist.textContent = track.artists;
-    document.getElementById("idle-title").textContent = track.name;
-    document.getElementById("idle-artist").textContent = track.artists;
 
     btnPlay.dataset.playing = track.paused ? "false" : "true";
     currentDurationMs = track.duration;
@@ -780,10 +805,14 @@ const spotify = new SpotifyBridge({
 
     if (track.artUrl && trackArt.src !== track.artUrl) {
       trackArt.src = track.artUrl;
-      document.getElementById("idle-art").src = track.artUrl;
+      const cImg = document.getElementById("art-corner-img");
+      const aImg = document.getElementById("art-ambient-img");
+      if (cImg) cImg.src = track.artUrl;
+      if (aImg) aImg.src = track.artUrl;
       bgLayer.style.backgroundImage = `url("${track.artUrl}")`;
       bgLayer.classList.add("has-art");
       analyzeAlbumArtUrl(track.artUrl);
+      updateSmartArtPlacement();
     }
   },
   onPlaybackSnapshot: (snapshot) => {
@@ -824,6 +853,8 @@ document.getElementById("btn-close-drawer").onclick = () => toggleDrawer(false);
 document.getElementById("btn-reset-scene").onclick = () => {
   prefs.lyrics = { ...defaultLyricsPrefs };
   prefs.vizIntensity = "balanced";
+  prefs.artAnchor = "adaptive";
+  prefs.artIntensity = "balanced";
   savePrefs();
   syncControlsFromPrefs();
   applyPrefs();
@@ -896,7 +927,7 @@ document.querySelectorAll(".seg-btn").forEach((btn) => {
   });
 });
 
-// Curated Combos & 14-Scene Cards
+// Curated Combos & 5-Scene Cards
 document.querySelectorAll(".mood-card").forEach((card) => {
   card.addEventListener("click", () => {
     const combo = CURATED_COMBOS.find((c) => c.id === card.dataset.combo);
@@ -1004,12 +1035,13 @@ seekBar.onchange = () => {
   if (currentDurationMs) spotify.seek((seekBar.value / 100) * currentDurationMs);
 };
 
-const bindInput = (id, key, isCheck = false, targetObj = prefs) => {
+const bindInput = (id, key, isCheck = false, targetObj = prefs, onChange) => {
   const el = document.getElementById(id);
   if (!el) return;
   el[isCheck ? "checked" : "value"] = targetObj[key];
   el.addEventListener("input", () => {
     targetObj[key] = isCheck ? el.checked : el.value;
+    if (onChange) onChange();
     savePrefs();
     syncControlsFromPrefs();
     applyPrefs();
@@ -1017,10 +1049,17 @@ const bindInput = (id, key, isCheck = false, targetObj = prefs) => {
 };
 
 [
-  ["opt-auto-color", "autoColor", true],
-  ["opt-smart-art", "smartIdleArt", true],
+  ["opt-theme-color-mode", "themeColorMode", false, () => {
+    if (prefs.themeColorMode === "album-palette" && currentArtUrl) analyzeAlbumArtUrl(currentArtUrl);
+  }],
+  ["opt-art-anchor", "artAnchor", false],
+  ["opt-art-scale", "artScale", false],
+  ["opt-art-intensity", "artIntensity", false],
   ["opt-surprise-rotate", "surpriseRotate", true],
-  ["opt-accent-color", "accent", false],
+  ["opt-surprise-favs", "surpriseFavoritesOnly", true, () => { surpriseDeck = []; }],
+  ["opt-accent-color", "accent", false, () => {
+    prefs.themeColorMode = "manual";
+  }],
   ["opt-theme-mode", "themeMode", false],
   ["opt-perf-mode", "perfMode", false],
   ["opt-viz-intensity", "vizIntensity", false],
@@ -1031,10 +1070,12 @@ const bindInput = (id, key, isCheck = false, targetObj = prefs) => {
   ["opt-sensitivity", "sensitivity", false],
   ["opt-smoothing", "smoothing", false],
   ["opt-density", "density", false]
-].forEach(([id, key, isCheck]) => bindInput(id, key, isCheck, prefs));
+].forEach(([id, key, isCheck, cb]) => bindInput(id, key, isCheck, prefs, cb));
 
 [
   ["lyr-enabled", "enabled", true],
+  ["lyr-scene-flow", "sceneFlow", false],
+  ["lyr-flow-motion", "flowMotion", false],
   ["lyr-source", "sourcePriority", false],
   ["lyr-bg-mode", "bgMode", false],
   ["lyr-bg-motion", "bgMotion", false],
@@ -1045,7 +1086,6 @@ const bindInput = (id, key, isCheck = false, targetObj = prefs) => {
   ["lyr-placement", "placement", false],
   ["lyr-motion", "motionIntensity", false],
   ["lyr-connector", "connectorStrength", false],
-  ["lyr-show-art", "showAlbumArt", true],
   ["lyr-offset", "offsetMs", false],
   ["lyr-follow", "followPlayback", true],
   ["lyr-reduced-motion", "reducedMotion", false]
@@ -1123,7 +1163,7 @@ window.addEventListener("keydown", (e) => {
   if (e.target.tagName === "INPUT" || e.target.tagName === "SELECT") return;
   const vizMap = {
     "1": "bars", "2": "radial", "3": "waveform", "4": "particles",
-    "5": "horizon", "6": "matrix", "7": "milkdrop", "8": "plasma",
+    "5": "horizon", "6": "matrix", "7": "milkdrop", "8": "plasma-ribbons",
     "9": "mirror", "0": "vinyl"
   };
   if (e.key === "?") {
@@ -1184,7 +1224,7 @@ function loop(now = performance.now()) {
   if (!isPaused) {
     const sample = audio.sample();
     renderer.render(sample);
-    lyrics.feedAudioBands(sample.bands);
+    lyrics.tick(sample.bands);
   }
 
   if (now - lastDiagAt > 600 && !drawer.classList.contains("hidden")) {

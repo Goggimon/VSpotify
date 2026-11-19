@@ -9,7 +9,7 @@ void main() {
 }
 `;
 
-// #4: Fractal Tunnel — Layered architectural SDF rings, depth fog, and iridescent palette mixing
+// #4: Fractal Tunnel — Layered architectural SDF rings, depth fog, and 3-role palette mixing
 const FRACTAL_TUNNEL_FRAG = `
 precision mediump float;
 varying vec2 v_uv;
@@ -20,6 +20,7 @@ uniform float u_mids;
 uniform float u_treble;
 uniform vec3 u_c1;
 uniform vec3 u_c2;
+uniform vec3 u_c3;
 uniform float u_steps;
 
 void main() {
@@ -27,13 +28,11 @@ void main() {
   float r = length(p);
   float a = atan(p.y, p.x);
 
-  // Beat-driven camera travel & subtle torsion
   float speed = u_time * 1.35;
   float depth = 0.72 / max(r, 0.04);
   float z = depth + speed;
   float twist = a + sin(z * 0.35 + u_time * 0.45) * (0.35 + u_mids * 0.55);
 
-  // Geometric faceted ribs scaled by quality steps
   float facets = floor(4.0 + u_steps * 0.35);
   float poly = cos(floor(0.5 + twist * facets / 6.2831853) * (6.2831853 / facets) - twist);
   float rib = abs(sin(z * 2.6 + poly * 1.4));
@@ -43,9 +42,8 @@ void main() {
   float glowLine = exp(-abs(rib - 0.5) * (7.0 - u_bass * 2.5));
 
   vec3 baseCol = mix(u_c1, u_c2, 0.5 + 0.5 * sin(z * 0.55 + twist * 0.5));
-  vec3 col = baseCol * (structure * 0.55 + glowLine * (0.75 + u_bass * 0.85 + u_treble * 0.4));
+  vec3 col = baseCol * (structure * 0.52) + mix(baseCol, u_c3, 0.45) * glowLine * (0.65 + u_bass * 0.8 + u_treble * 0.35);
 
-  // Depth fog & center aperture vignette
   float fog = smoothstep(0.03, 0.38, r) * smoothstep(1.38, 0.14, r);
   col *= fog;
   float alpha = clamp(max(col.r, max(col.g, col.b)) * 1.4, 0.0, 1.0);
@@ -53,7 +51,7 @@ void main() {
 }
 `;
 
-// #5: Kaleidoscope — Multi-fold polar symmetry with optional album-art texture refraction
+// #5: Kaleidoscope — Multi-fold polar symmetry preserving full palette shade family + album texture
 const KALEIDOSCOPE_FRAG = `
 precision mediump float;
 varying vec2 v_uv;
@@ -64,6 +62,7 @@ uniform float u_mids;
 uniform float u_treble;
 uniform vec3 u_c1;
 uniform vec3 u_c2;
+uniform vec3 u_c3;
 uniform float u_steps;
 uniform sampler2D u_tex;
 uniform float u_hasTex;
@@ -80,17 +79,16 @@ void main() {
 
   vec2 kp = vec2(cos(a), sin(a)) * r;
 
-  // Stained-glass interference petals
   float w1 = sin(kp.x * 11.0 + u_time * 0.9) * cos(kp.y * 11.0 - u_time * 0.7);
   float w2 = cos((kp.x + kp.y) * 7.5 - u_time * 0.6);
   float petal = smoothstep(-0.15, 0.85, w1 * 0.65 + w2 * 0.35 + u_mids * 0.35);
   float edge = exp(-abs(w1) * 4.5);
 
-  vec3 col = mix(u_c1, u_c2, petal) + (u_c2 * 0.45 * edge);
+  vec3 col = mix(u_c1, u_c2, petal) + (u_c3 * 0.42 * edge);
   if (u_hasTex > 0.5) {
     vec2 tuv = fract(kp * 0.85 + vec2(0.5 + sin(u_time * 0.15) * 0.08));
     vec3 texCol = texture2D(u_tex, tuv).rgb;
-    col = mix(col, texCol * (1.0 + edge * 0.5), 0.52);
+    col = mix(col, texCol * (1.0 + edge * 0.45), 0.52);
   }
 
   col *= (0.48 + u_bass * 0.65 + u_treble * 0.32) * smoothstep(1.15, 0.04, r);
@@ -110,6 +108,7 @@ uniform float u_mids;
 uniform float u_treble;
 uniform vec3 u_c1;
 uniform vec3 u_c2;
+uniform vec3 u_c3;
 uniform float u_steps;
 
 void main() {
@@ -131,8 +130,8 @@ void main() {
   float vein = 1.0 - smoothstep(0.0, 0.68, abs(sin(v * 0.68)));
   float core = exp(-r * (1.15 - u_bass * 0.35)) * (0.45 + u_bass * 0.65);
 
-  vec3 col = mix(u_c1 * 0.28, u_c2, vein) * (0.58 + u_bass * 0.75 + u_treble * 0.35);
-  col += mix(u_c1, vec3(1.0), 0.35) * core * 0.55;
+  vec3 col = mix(u_c2 * 0.35, u_c1, vein) * (0.58 + u_bass * 0.72 + u_treble * 0.32);
+  col += u_c3 * core * 0.55;
   float alpha = clamp(max(col.r, max(col.g, col.b)) * 1.35 + 0.12, 0.0, 1.0);
   gl_FragColor = vec4(col, alpha);
 }
@@ -191,7 +190,6 @@ export class WebGLVisualizerHost {
     }
 
     if (mode) {
-      // Release other cached programs when switching WebGL visualizers
       for (const [k, p] of this.programs.entries()) {
         if (k !== mode) {
           this.gl.deleteProgram(p.prog);
@@ -248,6 +246,7 @@ export class WebGLVisualizerHost {
       uTreble: gl.getUniformLocation(prog, "u_treble"),
       uC1: gl.getUniformLocation(prog, "u_c1"),
       uC2: gl.getUniformLocation(prog, "u_c2"),
+      uC3: gl.getUniformLocation(prog, "u_c3"),
       uSteps: gl.getUniformLocation(prog, "u_steps"),
       uTex: gl.getUniformLocation(prog, "u_tex"),
       uHasTex: gl.getUniformLocation(prog, "u_hasTex")
@@ -288,6 +287,7 @@ export class WebGLVisualizerHost {
     this.time += (0.014 + (sample.bands.energy || 0) * 0.025) * speed;
     const c1 = hexToRgbNorm(palette[0]);
     const c2 = hexToRgbNorm(palette[1] || palette[0]);
+    const c3 = hexToRgbNorm(palette[2] || palette[1] || palette[0]);
 
     gl.useProgram(info.prog);
     gl.bindBuffer(gl.ARRAY_BUFFER, this.quadBuf);
@@ -301,6 +301,7 @@ export class WebGLVisualizerHost {
     gl.uniform1f(info.uTreble, sample.bands.treble || 0);
     gl.uniform3f(info.uC1, c1[0], c1[1], c1[2]);
     gl.uniform3f(info.uC2, c2[0], c2[1], c2[2]);
+    if (info.uC3 !== null) gl.uniform3f(info.uC3, c3[0], c3[1], c3[2]);
     gl.uniform1f(info.uSteps, qualityCfg.shaderSteps);
 
     if (info.uHasTex !== null) {

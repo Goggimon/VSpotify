@@ -103,6 +103,12 @@ export class VisualizerRenderer {
     this.accent = this.palette[0];
   }
 
+  setPaletteRoles(roles) {
+    if (!roles) return;
+    this.paletteRoles = roles;
+    this.setPalette([roles.visualPrimary, roles.visualSecondary, roles.highlight]);
+  }
+
   colorAt(index) {
     return this.palette[index % this.palette.length];
   }
@@ -222,7 +228,8 @@ export class VisualizerRenderer {
         this.sensitivity,
         this.artImage,
         this.artScale,
-        this.showCenterArt
+        this.showCenterArt,
+        this.paletteRoles
       );
       ctx.restore();
       return;
