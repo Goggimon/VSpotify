@@ -200,14 +200,24 @@ export class SpotifyBridge {
         const suffix = this.sdkError ? ` · ${this.sdkError}` : "";
         this.callbacks.onStatus?.(`${deviceLabel}${suffix}`, true);
 
-        this.callbacks.onTrackUpdate?.({
+        const snapshot = {
+          trackId: data.item.id || null,
+          uri: data.item.uri || null,
+          trackKey: data.item.uri || data.item.id || `title:${data.item.name}`,
           name: data.item.name,
           artists: data.item.artists.map((a) => a.name).join(", "),
+          album: data.item.album?.name || "",
+          albumId: data.item.album?.id || null,
           artUrl: data.item.album?.images?.[0]?.url || "",
           duration: data.item.duration_ms || 0,
           position: data.progress_ms || 0,
-          paused: !data.is_playing
-        });
+          paused: !data.is_playing,
+          observedAt: performance.now(),
+          source: "poll"
+        };
+
+        this.callbacks.onTrackUpdate?.(snapshot);
+        this.callbacks.onPlaybackSnapshot?.(snapshot);
       } catch {
         // Ignore transient network hiccups
       }
@@ -269,14 +279,25 @@ export class SpotifyBridge {
         const track = state.track_window.current_track;
         this.isPaused = state.paused;
         this.callbacks.onPlayingChange?.(!state.paused);
-        this.callbacks.onTrackUpdate?.({
+
+        const snapshot = {
+          trackId: track.id || null,
+          uri: track.uri || null,
+          trackKey: track.uri || track.id || `title:${track.name}`,
           name: track.name,
           artists: track.artists.map((a) => a.name).join(", "),
+          album: track.album?.name || "",
+          albumId: track.album?.uri || null,
           artUrl: track.album.images[0]?.url || "",
           duration: state.duration,
           position: state.position,
-          paused: state.paused
-        });
+          paused: state.paused,
+          observedAt: performance.now(),
+          source: "sdk"
+        };
+
+        this.callbacks.onTrackUpdate?.(snapshot);
+        this.callbacks.onPlaybackSnapshot?.(snapshot);
       });
 
       this.player.addListener("initialization_error", ({ message }) => {
@@ -329,8 +350,16 @@ export class SpotifyBridge {
   async seek(ms) {
     if (this.sdkReady && this.player) {
       const state = await this.player.getCurrentState();
-      if (state) return this.player.seek(ms);
+      if (state) await this.player.seek(ms);
+      else await this.apiFetch(`/me/player/seek?position_ms=${Math.round(ms)}`, { method: "PUT" });
+    } else {
+      await this.apiFetch(`/me/player/seek?position_ms=${Math.round(ms)}`, { method: "PUT" });
     }
-    await this.apiFetch(`/me/player/seek?position_ms=${Math.round(ms)}`, { method: "PUT" });
+    this.callbacks.onPlaybackSnapshot?.({
+      position: ms,
+      paused: this.isPaused,
+      observedAt: performance.now(),
+      source: "seek"
+    });
   }
 }
