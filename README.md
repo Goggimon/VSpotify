@@ -1,36 +1,43 @@
-# VSpotify v2.0.0
+# VSpotify v3.5.0
 
-A minimalist, fullscreen Spotify visualizer and HUD hosted on GitHub Pages—featuring 17 real-time 60fps visualizers, dynamic 2-color album-art theming, smart fullscreen art placement, and zero-delay browser Tab Audio FFT reactivity.
+A calm, fullscreen visual instrument for Spotify and local audio—featuring **27 real-time visualizers** (Canvas 2D + WebGL shaders), **5 fluid connected lyric scenes** with Adaptive Scene Flow, an **8-role Album Palette engine**, **Adaptive Album Art Anchors**, and a **Performance Governor** built to keep playback smooth on any device.
 
 **Live App:** https://goggimon.github.io/VSpotify/
 
+---
+
 ## Features
-- **Automatic Spotify HUD & Connect Device:** Follows whatever device you're playing on (Mac, Phone, or Echo Dot) via Spotify Web API, with Play/Pause/Next/Previous/Seek controls and in-tab playback (**Play Here**) via Spotify's Web Playback SDK.
-- **Zero-Delay 60fps Reactivity:** Click **Play Here**, then **Tab Audio** (with *Share tab audio* checked) to pipe live audio into the Web Audio `AnalyserNode`—no admin privileges or kernel drivers required. Automatically falls back to a smooth Playback-Synced Pulse when playing on external devices.
-- **Dynamic 2-Color Album Art Theme:** Extracts the most present color for the background and the 2nd/3rd most present distinct colors for alternating visualizer lines, bars, and waves.
-- **Smart Fullscreen & Idle Art Placement:** When fullscreen is active or the HUD auto-hides:
-  - Centered visualizers (*Radial, Spiral, Milkdrop, Mandala, Orbit*) place the live album art in the center so visuals diverge outward from it.
-  - Linear/wall visualizers (*Bars, Wave, Plasma, Aurora, Synthwave, etc.*) dock a compact floating album-art card in the bottom-left corner.
-- **17 Visualizers:**
-  1. `Bars` — Classic spectrum bars with peak caps
-  2. `Radial` — Circular beat ring around center art
-  3. `Wave` — Multi-layer glowing oscilloscope
-  4. `Particles` — Audio-reactive starfield
-  5. `Horizon` — Layered frequency terrain
-  6. `Matrix` — LED equalizer grid
-  7. `Milkdrop` — Winamp-style geometric tunnel
-  8. `Plasma` — Flowing interference ribbons
-  9. `Concert` — Symmetrical festival LED mirror spectrum
-  10. `Vinyl` — Spinning turntable disc with live album art
-  11. `Warp` — 3D starfield warp tunnel
-  12. `Spiral` — Rotating multi-arm frequency galaxy
-  13. `Synthwave` — Segmented retro sun & 3D perspective grid
-  14. `DNA` — Intertwining double-helix wave
-  15. `Mandala` — 12-fold sacred geometry petals
-  16. `Aurora` — Vertical northern-lights curtains
-  17. `Orbit` — Tilted planetary rings with beat-reactive nodes
-- **4 Fullscreen HUD Layouts (`H`):** `Cinema`, `Minimal`, `Centered`, and `Hidden` (with configurable idle auto-hide).
-- **Luxury Customization & Presets:** Switch between **Obsidian Glass** and **Warm Espresso** surfaces, tune **Line/Bar Thickness**, **Motion Speed**, **Center Art Size**, **Glow**, **Sensitivity**, **Smoothing**, **Density**, **Visual EQ Reactivity** (Bass/Mids/Treble), and save custom presets (alongside built-in *Late Night*, *Concert Hall*, *Deep Space*, and *Retro Dusk*).
+
+### 5 Fluid Lyric Scenes & Adaptive Scene Flow
+- **Signature Connected Scenes:**
+  1. **Connected Zigzag** — Spatial word route linked by a continuous SVG Bezier path and traveling highlight comet.
+  2. **Cinema Captions** — Clean, readable two-line default with calm cross-dissolves.
+  3. **Editorial** — Large asymmetric serif typography that opens up during choruses.
+  4. **Constellation** — Persistent connected star-node field with subtle audio-reactive pulse.
+  5. **Neon Thread** — Continuous glowing light thread linking adjacent lines.
+- **Fluid Continuity:** Outgoing lines dissolve smoothly (`is-entering` / `is-outgoing`) rather than snapping/rebuilding every line.
+- **Adaptive Scene Flow:** Detects verses, choruses, and instrumental breathing gaps to modulate motion (`Calm` / `Balanced` / `Expressive`) while keeping one consistent scene identity per song.
+- **Flexible Sources:** Fetches synced/static lyrics via [LRCLIB](https://lrclib.net/) or lets you import local `.lrc`, `.txt`, or `.json` files with timing offset controls.
+
+### 8-Role Album Palette & Adaptive Art Anchors
+- **Full 8-Role Album Palette:** Extracts `background`, `backgroundShade`, `lyricPrimary`, `lyricSecondary`, `visualPrimary`, `visualSecondary`, `highlight`, and `shadow` once per album-art change—preserving tonal shades while guaranteeing lyric contrast. Switch between **Album Palette** and **Manual Accent** anytime.
+- **Adaptive Album Art Anchors:** Configure **Album Art** (`Adaptive`, `Center`, `Corner`, `Ambient`, `Hidden`), **Art Scale**, and **Art Intensity** (`Subtle`, `Balanced`, `Bold`). In `Adaptive` mode, artwork embeds into centered visualizers when lyrics aren't blocking it, docks cleanly in the corner for linear modes, and softens into an ambient disc behind lyric scenes.
+
+### 27 Visualizers & Performance Governor
+- **Single Central Loop + Performance Governor:** One `requestAnimationFrame` loop drives audio sampling, the active visualizer, and lyrics together. Choose **Cinematic**, **Balanced**, or **Battery Saver** profiles; if a heavy WebGL mode lags or WebGL is unavailable, VSpotify scales down detail first and safely falls back to **Retro Audio Lab** with a one-click switch-back toast.
+- **Categorized Visualizer Browser (`B`) & Shuffle-Bag `Surprise Me` (`R`):** Browse by category or Favorites, and cycle through every supported visualizer without repeats until the deck resets.
+  - **Core (6):** `Bars`, `Radial`, `Wave`, `Particles`, `Horizon`, `Matrix`
+  - **Spatial (8):** `Vinyl`, `Warp`, `Spiral`, `Synthwave`, `DNA`, `Mandala`, `Aurora`, `Orbit`
+  - **Legacy FX (10):** `Liquid Spectrum`, `Fractal Tunnel` *(WebGL)*, `Kaleidoscope` *(WebGL)*, `SuperScope` *(multi-equation vector art)*, `Plasma Reactor` *(WebGL)*, `Wireframe City`, `Laser Cathedral`, `Chromatic Bloom`, `Crystal Engine`, `Milkdrop`
+  - **Technical (3):** `Retro Audio Lab` *(always-smooth VU + scope)*, `Plasma Ribbons`, `Concert`
+
+### Playback, Audio & HUD
+- **Automatic Spotify HUD & Connect Device:** Follows playback on any Spotify Connect device (Mac, phone, speaker) via Spotify Web API, with Play/Pause/Next/Previous/Seek and in-tab **Play Here** via Spotify's Web Playback SDK.
+- **Zero-Delay 60fps Tab Audio:** Click **Play Here** → **Tab Audio** (with *Share tab audio* checked) to pipe live audio into the Web Audio `AnalyserNode`—no admin privileges or virtual audio drivers required. Falls back to a smooth playback-synced pulse on external devices.
+- **Demo Scene & Local Audio:** Test without logging into Spotify using **Demo Scene** (built-in synth beat) or **Local Audio** (`Customize → Playback & Lyrics → Advanced`).
+- **4 HUD Presets (`H`) & Lyric Focus (`V`):** Cycle between `Cinema`, `Minimal`, `Centered`, and `Hidden`, or toggle **Lyric Focus** to dim the visualizer and let lyrics lead.
+
+---
 
 ## Setup
 
@@ -39,17 +46,16 @@ A minimalist, fullscreen Spotify visualizer and HUD hosted on GitHub Pages—fea
 3. Click **Connect**, paste your **Client ID**, and authorize (Spotify Premium required).
 4. Click **Play Here** → **Tab Audio** → select **This Tab** (check **Share tab audio**) for real-time 60fps reactivity.
 
-*(To test without logging into Spotify, open **Customize** (`C`) and use **Synth Beat** or **Load Audio File**.)*
+---
 
 ## Keyboard Shortcuts
-- `1–9`, `0`: Switch between the first 10 visualizers (`0` = Vinyl)
-- `H`: Cycle HUD layout (`Cinema` → `Minimal` → `Centered` → `Hidden`)
-- `F`: Toggle Fullscreen
-- `C`: Open / Close Customization Drawer
 - `Space`: Play / Pause
-
-## Roadmap
-- **v2.1 — Synced Lyrics & Queue Drawer:** Time-synced lyrics overlay (via LRCLIB) plus a slide-up Spotify queue and playlist switcher.
-- **v2.2 — WebGL / GLSL Shader Modes:** GPU-accelerated fluid smoke, liquid metal, and raymarched 3D tunnels.
-- **v2.3 — Second-Screen / TV Display Mode:** A `?display=1` URL mode that hides controls completely for a monitor or TV while you control playback from your phone.
-- **v3.0 — Optional Desktop Wrapper:** Lightweight Electron/Tauri or macOS WebKit shell for global media keys and zero-prompt audio capture.
+- `L`: Toggle Lyrics
+- `V`: Toggle Lyric Focus Mode
+- `B`: Open Visualizer Browser
+- `R`: Surprise Me (shuffle-bag next visualizer)
+- `H`: Cycle HUD Layout (`Cinema` → `Minimal` → `Centered` → `Hidden`)
+- `C`: Open / Close Customize Drawer
+- `F`: Toggle Fullscreen
+- `1–9`, `0`: Quick-switch first 10 visualizers
+- `?`: Show Keyboard Shortcuts

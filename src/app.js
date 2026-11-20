@@ -7,7 +7,7 @@ import { LyricsController } from "./lyrics.js";
 import { LYRIC_STYLES, LYRIC_STYLE_MAP, resolveLyricStyleId } from "./lyrics-layouts.js";
 import { extractAlbumPalette, buildManualPalette, applyPaletteToDocument } from "./palette.js";
 
-const APP_VERSION = "v3.0.0";
+const APP_VERSION = "v3.5.0";
 
 const audio = new AudioEngine();
 const canvas = document.getElementById("viz-canvas");
